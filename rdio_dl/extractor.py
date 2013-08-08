@@ -325,13 +325,16 @@ class RdioInfoExtractor(InfoExtractor):
 
 class RdioIE(RdioInfoExtractor):
     IE_DESC = u'Rdio'
-    _VALID_URL = r'http://www.rdio.com/artist/(?P<artist>.*?)/album/(?P<album>.*?)/track/(?P<track>.*?)/'
+    _VALID_URL = r'''^(?:https?://)?
+                      (?:(?:(?:www\.)?rdio.com/artist/(?P<artist>.*)
+                          /album/(?P<album>.*)/track/(?P<track>.*)/$)
+                       |(?:rd.io/x/[\w\d-]+/$))'''
+
+    @classmethod
+    def suitable(cls, url):
+        return re.match(cls._VALID_URL, url, flags=re.VERBOSE) is not None
 
     def _real_extract(self, url):
-        mobj = re.match(self._VALID_URL, url)
-        if mobj is None:
-            raise ExtractorError(u'Invalid URL: {0}'.format(url))
-
         self._prepare_for_extraction()
 
         obj = self._rdio.call('getObjectFromUrl', dict(url=url))
