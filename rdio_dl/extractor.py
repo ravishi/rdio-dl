@@ -193,24 +193,26 @@ class RdioIE(RdioInfoExtractor):
             raise ExtractorError(u'Failed to retrieve a Rdio track from'
                                  u' the given URL')
 
-        key = obj['result']['key']
-        pi = self._rdio.get_playback_info(key)
+        track = obj['result']
 
-        if not pi:
+        playback_info = self._rdio.get_playback_info(track['key'])
+
+        if not playback_info:
             raise ExtractorError(u'Failed to get playback info from the given'
                                  u' Rdio track URL')
 
-        app = pi['streamApp'][1:]
-        url = 'rtmpe://{streamHost}:1935{streamApp}'.format(**pi)
-        play_path = u':'.join(['mp3', pi['surl']])
+        app = playback_info['streamApp'][1:]
+        url = 'rtmpe://{streamHost}:1935{streamApp}'.format(**playback_info)
+        play_path = u':'.join(['mp3', playback_info['surl']])
 
         return {
-            'id': 1,
+            'id': track['key'],
             'url': url,
             'play_path': play_path,
             'app': app,
-            'title': 'Dummy',
-            'description': 'Dummy',
-            'thumbnail': 'dummy.jpg',
+            'title': track['name'],
+            'uploader': track['artist'],
+            'description': u'',
+            'thumbnail': track['icon'],
             'ext': 'flv',
         }
