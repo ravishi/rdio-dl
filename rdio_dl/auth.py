@@ -4,8 +4,21 @@ import requests
 from urllib import urlencode
 from urlparse import urlparse, parse_qs
 
-from .utils import merge
-from .utils import SimplifiedOpenerDirectorWrapper
+
+def merge(*args):
+    """Merges the given dicts in reverse order.
+
+    ::
+
+        >>> a = {'foo': 'bar'}
+        >>> b = {'foo': 'BAR', 'ham': 'SPAM'}
+        >>> merge(a, b)
+        ... {'foo': 'bar', 'ham': 'SPAM'}
+    """
+    r = {}
+    for d in reversed(args):
+        r.update(d)
+    return r
 
 
 class InvalidCredentials(Exception):

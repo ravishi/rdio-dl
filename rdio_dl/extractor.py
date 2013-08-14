@@ -12,7 +12,6 @@ from pyamf.remoting.client import RemotingService
 from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
 
-from .utils import SimplifiedOpenerDirectorWrapper
 from .auth import get_auth_verifier_and_cookies
 from .rdio_simple import Rdio as RdioSimple
 
