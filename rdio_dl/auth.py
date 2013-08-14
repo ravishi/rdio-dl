@@ -33,7 +33,7 @@ def extract_api_version(html):
     # we're searching for something like
     # function b(){this.url="/api/1/"}var c=20130730
     m = re.search(
-        r'var c ?= ?20(?P<version>\d{6})',
+        r'var c ?= ?(?P<version>20\d{6})',
         html,
     )
     return m.group('version')
