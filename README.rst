@@ -2,7 +2,7 @@ rdio-dl
 =======
 
 
-An youtube-dl extension that lets you download songs from Rdio.
+A youtube-dl extension that lets you download songs from Rdio.
 
 
 Usage
