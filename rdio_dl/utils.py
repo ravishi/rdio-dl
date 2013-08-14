@@ -4,6 +4,22 @@ from urllib import urlencode
 from contextlib import closing
 
 
+def merge(*args):
+    """Merges the given dicts in reverse order.
+
+    ::
+
+        >>> a = {'foo': 'bar'}
+        >>> b = {'foo': 'BAR', 'ham': 'SPAM'}
+        >>> merge(a, b)
+        ... {'foo': 'bar', 'ham': 'SPAM'}
+    """
+    r = {}
+    for d in reversed(args):
+        r.update(d)
+    return r
+
+
 # taken from kennethreitz' requests
 def get_encoding_from_headers(headers):
     """Returns encodings from given HTTP Header Dict.
@@ -57,8 +73,12 @@ def get_unicode_from_response(r):
         return r.content
 
 
-class SimplifiedOpenerDirector(urllib2.OpenerDirector):
-    def fetch(url, data=None, headers=None, *args, **kwargs):
+class SimplifiedOpenerDirectorWrapper(urllib2.OpenerDirector):
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+        urllib2.OpenerDirector.__init__(self)
+
+    def fetch(self, url, data=None, headers=None, *args, **kwargs):
         request = urllib2.Request(url)
 
         if data is not None:
@@ -76,10 +96,16 @@ class SimplifiedOpenerDirector(urllib2.OpenerDirector):
 
             request.add_header(k, v)
 
-        with closing(opener.open(request)) as response:
+        with closing(self.wrapped.open(request)) as response:
             # XXX we should preserve the read method, but w/e
             response.request = request
             response.content = response.read()
             response.text = get_unicode_from_response(response)
 
         return response
+
+    def get(self, url, *args, **kwargs):
+        return self.fetch(url, *args, **kwargs)
+
+    def post(self, url, data, *args, **kwargs):
+        return self.fetch(url, data=data, *args, **kwargs)
