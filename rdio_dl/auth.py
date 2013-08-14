@@ -1,6 +1,6 @@
 import re
 import json
-import urllib2
+import requests
 from urllib import urlencode
 from urlparse import urlparse, parse_qs
 
@@ -41,11 +41,11 @@ def extract_authorization_key(html):
         return m.group('authorization_key')
 
 
-def fetch_api_version(opener):
+def fetch_api_version(session):
     # extract API version
     rdio_json_url = 'http://www.rdio.com/media/fresh/now/targets/rdio.json'
 
-    rdio_json = opener.get(rdio_json_url)
+    rdio_json = session.get(rdio_json_url)
     rdio_json = json.loads(rdio_json.text)
 
     rdio_core_url = '/'.join([
@@ -54,12 +54,12 @@ def fetch_api_version(opener):
         rdio_json['scripts'][0][1][0],
     ])
 
-    rdio_core_page = opener.get(rdio_core_url)
+    rdio_core_page = session.get(rdio_core_url)
 
     return extract_api_version(rdio_core_page.text)
 
 
-def _api_call(opener, method, params, headers=None):
+def _api_call(session, method, params, headers=None):
     params.setdefault('method', method)
 
     headers = merge({
@@ -70,16 +70,16 @@ def _api_call(opener, method, params, headers=None):
 
     url = 'https://www.rdio.com/api/1/' + method
 
-    return opener.post(url, data=params, headers=headers)
+    return session.post(url, data=params, headers=headers)
 
 
-def get_auth_verifier_and_cookies(auth_url, username, password, user_agent):
-    opener = urllib2.build_opener()
-    opener = SimplifiedOpenerDirectorWrapper(opener)
+def get_auth_verifier_and_cookies(auth_url, username, password, session=None, user_agent=None):
+    if session is None:
+        session = requests.Session()
 
-    auth_page = opener.get(auth_url)
+    auth_page = session.get(auth_url)
 
-    version = fetch_api_version(opener)
+    version = fetch_api_version(session)
 
     def apicall(method, **kwargs):
         referer = kwargs.pop('referer', None)
@@ -97,7 +97,7 @@ def get_auth_verifier_and_cookies(auth_url, username, password, user_agent):
             'v': version,
         }, kwargs)
 
-        return _api_call(opener, method, params, headers=headers)
+        return _api_call(session, method, params, headers=headers)
 
     oauth_token = parse_qs(urlparse(auth_page.url).query)['oauth_token'][0]
 
@@ -116,7 +116,7 @@ def get_auth_verifier_and_cookies(auth_url, username, password, user_agent):
             urlencode({'allowCreate': 1, 'next': auth_page.url}),
         ])
 
-        login_page = opener.get(login_url)
+        login_page = session.get(login_url)
 
         akey = extract_authorization_key(login_page.text)
         login = apicall('signIn',
@@ -131,7 +131,7 @@ def get_auth_verifier_and_cookies(auth_url, username, password, user_agent):
         if not login['status'] == u'ok':
             raise InvalidCredentials()
 
-        auth_page = opener.get(login['result']['redirect_url'])
+        auth_page = session.get(login['result']['redirect_url'])
 
         akey = extract_authorization_key(auth_page.text)
         oauth_state = apicall('getOAuth1State',
@@ -147,11 +147,14 @@ def get_auth_verifier_and_cookies(auth_url, username, password, user_agent):
     verifier = oauth_state['result']['verifier']
 
     if not oauth_state['result']['isAuthorized']:
+        #akey = extract_authorization_key(oauth_state.text)
         approve = apicall('approveOAuth1App',
-                            token=oauth_token,
-                            verifier=verifier,
-                            referer=auth_page.url)
+                          token=oauth_token,
+                          verifier=verifier,
+                          referer=auth_page.url,
+                          _authorization_key=akey)
 
+        import pdb; pdb.set_trace()
         approve = json.loads(approve.text)
 
         if not approve['status'] == 'ok':
