@@ -147,14 +147,12 @@ def get_auth_verifier_and_cookies(auth_url, username, password, session=None, us
     verifier = oauth_state['result']['verifier']
 
     if not oauth_state['result']['isAuthorized']:
-        #akey = extract_authorization_key(oauth_state.text)
         approve = apicall('approveOAuth1App',
                           token=oauth_token,
                           verifier=verifier,
                           referer=auth_page.url,
                           _authorization_key=akey)
 
-        import pdb; pdb.set_trace()
         approve = json.loads(approve.text)
 
         if not approve['status'] == 'ok':
