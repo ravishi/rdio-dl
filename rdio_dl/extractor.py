@@ -13,7 +13,6 @@ from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
 
 from requests_oauthlib import OAuth1Session
-
 from .auth import get_auth_verifier_and_cookies
 
 
@@ -32,13 +31,12 @@ class Rdio(object):
     def __init__(self, consumer, state=None):
         self._state = state or {}
 
-        if self.auth_token:
-            key, secret = self.auth_token
-        else:
-            key = secret = None
+        ro_key, ro_secret = self.auth_token or (None, None)
+
         self.oauth = OAuth1Session(consumer[0], client_secret=consumer[1],
-                                   resource_owner_key=key,
-                                   resource_owner_secret=secret)
+                                    resource_owner_key=ro_key,
+                                    resource_owner_secret=ro_secret,
+                                    callback_uri='oob')
 
     @property
     def auth_token(self):
@@ -73,27 +71,27 @@ class Rdio(object):
 
     def authenticate(self, username, password):
         request_token_url = u'http://api.rdio.com/oauth/request_token'
+        access_token_url = u'http://api.rdio.com/oauth/access_token'
 
-        r = None
-        while not r or u'duplicate nonce' in r.text.lower():
-            r = self.oauth.post(request_token_url, data={'oauth_callback': 'oob'})
+        token = None
+        while not token:
+            try:
+                token = self.oauth.fetch_request_token(request_token_url)
+            except ValueError:
+                # Not a valid urlencoded string
+                # It happens whenever Rdio says our nonce is duplicated. But if
+                # we keep trying it'll eventually work.
+                continue
 
-        r = dict(parse_qsl(r.text))
-
-        self.oauth._client.client.callback_uri = None
-        self.oauth._client.client.realm = None
-
-        auth_url = r['login_url'] + '?oauth_token=' + r['oauth_token']
+        auth_url = self.oauth.authorization_url(token.pop('login_url'))
 
         verifier, cookies = self.get_auth_verifier_and_cookies(auth_url, username, password)
 
-        attrs = {'oauth_token_secret': r['oauth_token_secret'],
-                 'oauth_token': r['oauth_token'],
-                 'oauth_verifier': verifier, }
+        # XXX requests_oauthlib does not support *out of band* workflows, so we
+        # have to set our verifier manually.
+        self.oauth._client.client.verifier = verifier
 
-        self.oauth._populate_attributes(attrs)
-
-        self.oauth.fetch_access_token(u'http://api.rdio.com/oauth/access_token')
+        self.oauth.fetch_access_token(access_token_url)
 
         playback_token = self.call('getPlaybackToken',
                                    dict(domain=self.APP_DOMAIN)).json()['result']
