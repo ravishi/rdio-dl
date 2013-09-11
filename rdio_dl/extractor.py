@@ -12,8 +12,8 @@ from pyamf.remoting.client import RemotingService
 from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
 
-from requests_oauthlib import OAuth1Session
-from .auth import get_auth_verifier_and_cookies
+from .oauth import RdioOAuth1Session
+from .authorization import RdioAuthorizationSession
 
 
 class ConfigurationError(ExtractorError):
@@ -23,8 +23,6 @@ class ConfigurationError(ExtractorError):
 class Rdio(object):
     APP_DOMAIN = 'localhost'
     AMF_ENDPOINT = 'https://www.rdio.com/api/1/amf/'
-    USER_AGENT = ('Mozilla/5.0 (X11; Linux i686) AppleWebKit/535.1'
-                  ' (KHTML, like Gecko) Chrome/13.0.782.99 Safari/535.1')
     RDIO_PLAYBACK_SECRET = '6JSuiNxJ2cokAK9T2yWbEOPX'
     RDIO_PLAYBACK_SECRET_SEED = 5381
 
@@ -33,10 +31,11 @@ class Rdio(object):
 
         ro_key, ro_secret = self.auth_token or (None, None)
 
-        self.oauth = OAuth1Session(consumer[0], client_secret=consumer[1],
-                                    resource_owner_key=ro_key,
-                                    resource_owner_secret=ro_secret,
-                                    callback_uri='oob')
+        self.oauth = RdioOAuth1Session(consumer[0], client_secret=consumer[1],
+                                       resource_owner_key=ro_key,
+                                       resource_owner_secret=ro_secret,
+                                       callback_uri='oob')
+        self.auth_session = RdioAuthorizationSession()
 
     @property
     def auth_token(self):
@@ -53,51 +52,27 @@ class Rdio(object):
     def getstate(self):
         return self._state.copy()
 
-    def call(self, method, params=dict()):
-        # make a copy of the dict
-        params = dict(params)
-        # put the method in the dict
-        params['method'] = method
-        # call to the server and parse the response
-        apiurl = 'http://api.rdio.com/1/'
-        r = None
-        while r is None or u'duplicate nonce' in r.text.lower():
-            r = self.oauth.post(apiurl, data=params)
-        return r
-
-    def get_auth_verifier_and_cookies(self, *args, **kwargs):
-        kwargs.setdefault('user_agent', self.USER_AGENT)
-        return get_auth_verifier_and_cookies(*args, **kwargs)
-
     def authenticate(self, username, password):
-        request_token_url = u'http://api.rdio.com/oauth/request_token'
-        access_token_url = u'http://api.rdio.com/oauth/access_token'
+        token = self.oauth.fetch_request_token()
 
-        token = None
-        while not token:
-            try:
-                token = self.oauth.fetch_request_token(request_token_url)
-            except ValueError:
-                # Not a valid urlencoded string
-                # It happens whenever Rdio says our nonce is duplicated. But if
-                # we keep trying it'll eventually work.
-                continue
+        login_url = token.pop('login_url')
 
-        auth_url = self.oauth.authorization_url(token.pop('login_url'))
+        authorization_url = self.oauth.authorization_url(login_url)
 
-        verifier, cookies = self.get_auth_verifier_and_cookies(auth_url, username, password)
+        verifier = self.auth_session\
+                .authorize_oauth_token(authorization_url, username, password)
 
-        # XXX requests_oauthlib does not support *out of band* workflows, so we
-        # have to set our verifier manually.
-        self.oauth._client.client.verifier = verifier
+        self.oauth.set_authorization_pin(verifier)
 
-        self.oauth.fetch_access_token(access_token_url)
+        self.oauth.fetch_access_token()
 
-        playback_token = self.call('getPlaybackToken',
-                                   dict(domain=self.APP_DOMAIN)).json()['result']
+        playback_token = self.oauth.api_post('getPlaybackToken',
+                                             params=dict(domain=self.APP_DOMAIN))
+
+        playback_token = playback_token.json().get('result')
 
         self._state = {
-            'cookies': cookies,
+            'cookies': dict(self.auth_session.cookies),
             'auth_token': (self.oauth._client.client.resource_owner_key,
                            self.oauth._client.client.resource_owner_secret,),
             'playback_token': playback_token,
@@ -110,7 +85,7 @@ class Rdio(object):
     def get_playback_info(self, key):
         svc = RemotingService(self.AMF_ENDPOINT,
                               amf_version=0,
-                              user_agent=self.USER_AGENT)
+                              user_agent=self.auth_session.user_agent)
 
         svc.addHTTPHeader('Cookie', 'r=' + self.rdio_cookie)
         svc.addHTTPHeader('Host', 'www.rdio.com')
@@ -187,7 +162,6 @@ class RdioInfoExtractor(InfoExtractor):
             raise ExtractorError("No username and password specified")
 
         if not self._rdio.is_authenticated():
-            print 'authenticating...'
             self._rdio.authenticate(username, password)
 
             state = self._rdio.getstate()
@@ -216,7 +190,7 @@ class RdioIE(RdioInfoExtractor):
     def _real_extract(self, url):
         self._prepare_for_extraction()
 
-        obj = self._rdio.call('getObjectFromUrl', dict(url=url)).json()
+        obj = self._rdio.oauth.api_post('getObjectFromUrl', dict(url=url)).json()
 
         if not (obj['status'] == u'ok' and obj['result']['type'] == u't'):
             raise ExtractorError(u'Failed to retrieve a Rdio track from'
