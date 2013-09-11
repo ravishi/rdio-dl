@@ -9,8 +9,8 @@ except IOError:
 setup(
     name='rdio_dl',
     version='0.0.1dev',
-    packages=['rdio_dl', 'rdio_dl.rdio_simple'],
-    install_requires=['youtube_dl', 'requests', 'PyAMF'],
+    packages=['rdio_dl'],
+    install_requires=['youtube_dl', 'requests', 'requests_oauthlib', 'PyAMF'],
     author='Dirley Rodrigues',
     author_email='dirleyrls@gmail.com',
     long_description=README,

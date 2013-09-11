@@ -33,7 +33,7 @@ def extract_api_version(html):
     # we're searching for something like
     # function b(){this.url="/api/1/"}var c=20130730
     m = re.search(
-        r'var c ?= ?(?P<version>20\d{6})',
+        r'var API_VERSION ?= ?(?P<version>20\d{6})',
         html,
     )
     return m.group('version')
@@ -155,7 +155,7 @@ def get_auth_verifier_and_cookies(auth_url, username, password, session=None, us
         oauth_state = json.loads(oauth_state.text)
 
     if not oauth_state.get('result'):
-        raise RuntimeError('Failed to authenticate')
+        raise RuntimeError('Failed to authenticate: %r' % oauth_state)
 
     verifier = oauth_state['result']['verifier']
 

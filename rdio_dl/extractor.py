@@ -6,14 +6,15 @@ import os.path
 import urllib2
 import argparse
 from urllib import urlencode
-from urlparse import urlparse, urljoin, parse_qs
+from urlparse import urlparse, urljoin, parse_qs, parse_qsl
 from ConfigParser import ConfigParser
 from pyamf.remoting.client import RemotingService
 from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
 
+from requests_oauthlib import OAuth1Session
+
 from .auth import get_auth_verifier_and_cookies
-from .rdio_simple import Rdio as RdioSimple
 
 
 class ConfigurationError(ExtractorError):
@@ -30,7 +31,14 @@ class Rdio(object):
 
     def __init__(self, consumer, state=None):
         self._state = state or {}
-        self._rdio = RdioSimple(consumer, self.auth_token)
+
+        if self.auth_token:
+            key, secret = self.auth_token
+        else:
+            key = secret = None
+        self.oauth = OAuth1Session(consumer[0], client_secret=consumer[1],
+                                   resource_owner_key=key,
+                                   resource_owner_secret=secret)
 
     @property
     def auth_token(self):
@@ -47,31 +55,53 @@ class Rdio(object):
     def getstate(self):
         return self._state.copy()
 
-    def __getattr__(self, name):
-        placeholder = object()
-        delegate = getattr(self._rdio, name, placeholder)
-        if delegate is not placeholder:
-            return delegate
-        raise AttributeError(name)
+    def call(self, method, params=dict()):
+        # make a copy of the dict
+        params = dict(params)
+        # put the method in the dict
+        params['method'] = method
+        # call to the server and parse the response
+        apiurl = 'http://api.rdio.com/1/'
+        r = None
+        while r is None or u'duplicate nonce' in r.text.lower():
+            r = self.oauth.post(apiurl, data=params)
+        return r
 
     def get_auth_verifier_and_cookies(self, *args, **kwargs):
         kwargs.setdefault('user_agent', self.USER_AGENT)
         return get_auth_verifier_and_cookies(*args, **kwargs)
 
     def authenticate(self, username, password):
-        auth_url = self._rdio.begin_authentication('oob')
+        request_token_url = u'http://api.rdio.com/oauth/request_token'
 
-        verifier, cookies = self.get_auth_verifier_and_cookies(
-                                                auth_url, username, password)
+        r = None
+        while not r or u'duplicate nonce' in r.text.lower():
+            r = self.oauth.post(request_token_url, data={'oauth_callback': 'oob'})
 
-        self._rdio.complete_authentication(verifier)
+        r = dict(parse_qsl(r.text))
+
+        self.oauth._client.client.callback_uri = None
+        self.oauth._client.client.realm = None
+
+        auth_url = r['login_url'] + '?oauth_token=' + r['oauth_token']
+
+        verifier, cookies = self.get_auth_verifier_and_cookies(auth_url, username, password)
+
+        attrs = {'oauth_token_secret': r['oauth_token_secret'],
+                 'oauth_token': r['oauth_token'],
+                 'oauth_verifier': verifier, }
+
+        self.oauth._populate_attributes(attrs)
+
+        self.oauth.fetch_access_token(u'http://api.rdio.com/oauth/access_token')
 
         playback_token = self.call('getPlaybackToken',
-                                   dict(domain=self.APP_DOMAIN))['result']
+                                   dict(domain=self.APP_DOMAIN)).json()['result']
 
         self._state = {
             'cookies': cookies,
-            'auth_token': self._rdio.token,
+            'auth_token': (self.oauth._client.client.resource_owner_key,
+                           self.oauth._client.client.resource_owner_secret,),
             'playback_token': playback_token,
         }
 
@@ -159,6 +189,7 @@ class RdioInfoExtractor(InfoExtractor):
             raise ExtractorError("No username and password specified")
 
         if not self._rdio.is_authenticated():
+            print 'authenticating...'
             self._rdio.authenticate(username, password)
 
             state = self._rdio.getstate()
@@ -187,7 +218,7 @@ class RdioIE(RdioInfoExtractor):
     def _real_extract(self, url):
         self._prepare_for_extraction()
 
-        obj = self._rdio.call('getObjectFromUrl', dict(url=url))
+        obj = self._rdio.call('getObjectFromUrl', dict(url=url)).json()
 
         if not (obj['status'] == u'ok' and obj['result']['type'] == u't'):
             raise ExtractorError(u'Failed to retrieve a Rdio track from'
