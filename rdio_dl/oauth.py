@@ -15,6 +15,15 @@ class RdioOAuth1Session(OAuth1Session):
         return super(RdioOAuth1Session, self)\
                 .fetch_access_token(self.access_token_url)
 
+    def get_access_token(self):
+        return {
+            'oauth_token': self._client.client.resource_owner_key,
+            'oauth_token_secret': self._client.client.resource_owner_secret,
+        }
+
+    def set_access_token(self, token):
+        self._populate_attributes(token)
+
     def set_authorization_pin(self, verifier):
         self._client.client.verifier = verifier
 
