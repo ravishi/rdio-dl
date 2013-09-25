@@ -13,7 +13,9 @@ class RdioAuthorizationSession(requests.Session):
 
     api_url = u'https://www.rdio.com/api/1/'
 
-    api_version = None
+    api_version = u'20130823'
+
+    authorization_key = None
 
     user_agent = (u'Mozilla/5.0 (X11; Linux i686) AppleWebKit/535.1'
                   u' (KHTML, like Gecko) Chrome/13.0.782.99 Safari/535.1')
@@ -21,13 +23,21 @@ class RdioAuthorizationSession(requests.Session):
     def __init__(self, *args, **kwargs):
         self.user_agent = kwargs.pop('user_agent', self.user_agent)
         self.api_version = kwargs.pop('api_version', self.api_version)
+        self.authorization_key = kwargs.pop('authorization_key', self.authorization_key)
         super(RdioAuthorizationSession, self).__init__(*args, **kwargs)
 
     def request(self, method, url, **kwargs):
-        headers = dict(kwargs.get('headers', {}))
+        headers = kwargs.pop('headers', None) or {}
         headers.setdefault('User-Agent', self.user_agent)
-        kwargs['headers'] = headers
-        return super(RdioAuthorizationSession, self).request(method, url, **kwargs)
+
+        resp = super(RdioAuthorizationSession, self).request(method, url,
+                                                             headers=headers,
+                                                             **kwargs)
+
+        if u'Env' in resp.text:
+            self.authorization_key = extract_authorization_key(resp.text)
+
+        return resp
 
     def api_post(self, method, params, headers=None):
 
@@ -37,7 +47,12 @@ class RdioAuthorizationSession(requests.Session):
             'Origin': u'https://www.rdio.com',
         }, headers or {})
 
-        params['method'] = method
+        params = merge({
+            'v': self.api_version,
+            'method': method,
+            'extras[]': u'*.WEB',
+            '_authorization_key': self.authorization_key,
+        }, params or {})
 
         return self.post(self.api_url + method, data=params, headers=headers)
 
@@ -64,15 +79,9 @@ class RdioAuthorizationSession(requests.Session):
         oauth_token = dict(parse_qsl(urlparse(auth_page.url).query))
         oauth_token = oauth_token.get('oauth_token')
 
-        auth_key = extract_authorization_key(auth_page.text)
-
-        def params(p):
-            return merge(p, {'extras[]': u'*.WEB', 'v': api_version})
-
-        oauth_state = self.api_post('getOAuth1State', params({
+        oauth_state = self.api_post('getOAuth1State', {
             'token': oauth_token,
-            '_authorization_key': auth_key,
-        }), headers={'Referer': auth_page.url}).json()
+        }, headers={'Referer': auth_page.url}).json()
 
         # 491: Requires login
         if oauth_state['code'] == 491:
@@ -83,27 +92,21 @@ class RdioAuthorizationSession(requests.Session):
 
             login_page = self.get(login_url)
 
-            auth_key = extract_authorization_key(login_page.text)
-
-            login = self.api_post('signIn', params({
+            login = self.api_post('signIn', {
                 'username': username,
                 'password': password,
                 'remember': 1,
                 'nextUrl': auth_page.url,
-                '_authorization_key': auth_key,
-            })).json()
+            }).json()
 
             if not login['status'] == u'ok':
                 raise AuthorizationError(u'Invalid credentials')
 
             auth_page = self.get(login['result']['redirect_url'])
 
-            auth_key = extract_authorization_key(auth_page.text)
-
-            oauth_state = self.api_post('getOAuth1State', params({
+            oauth_state = self.api_post('getOAuth1State', {
                 'token': oauth_token,
-                '_authorization_key': auth_key,
-            }), headers={'Referer': auth_page.url}).json()
+            }, headers={'Referer': auth_page.url}).json()
 
         if not oauth_state.get('result'):
             raise AuthorizationError(u"Failed to authorize application: `{0}'"\
@@ -112,11 +115,10 @@ class RdioAuthorizationSession(requests.Session):
         oauth_verifier = oauth_state['result']['verifier']
 
         if not oauth_state['result']['isAuthorized']:
-            approve = self.api_post('approveOAuth1App', params({
+            approve = self.api_post('approveOAuth1App', {
                 'token': oauth_token,
                 'verifier': oauth_verifier,
-                '_authorization_key': auth_key,
-            }), headers={'Referer': auth_page.url}).json()
+            }, headers={'Referer': auth_page.url}).json()
 
             if not approve['status'] == u'ok':
                 raise AuthorizationError(u"Failed to approve application.")
