@@ -1,8 +1,12 @@
 import re
 import json
 import requests
-from urllib import urlencode
-from urlparse import urlparse, parse_qsl
+
+from requests.cookies import cookiejar_from_dict
+
+
+API_URL = u'https://www.rdio.com/api/1/'
+SIGNIN_URL = u'https://www.rdio.com/account/signin/'
 
 
 class AuthorizationError(Exception):
@@ -14,7 +18,7 @@ class RdioSession(requests.Session):
     user_agent = (u'Mozilla/5.0 (X11; Linux i686) AppleWebKit/535.1'
                   u' (KHTML, like Gecko) Chrome/13.0.782.99 Safari/535.1')
 
-    api_url = u'https://www.rdio.com/api/1/'
+    api_url = API_URL
     api_version = None
 
     def __init__(self, *args, **kwargs):
@@ -25,7 +29,11 @@ class RdioSession(requests.Session):
         self.env = kwargs.pop('env', None)
         self.authorization_key = kwargs.pop('authorization_key', None)
 
+        cookies = kwargs.pop('cookies')
+
         super(RdioSession, self).__init__(*args, **kwargs)
+
+        self.cookies = cookiejar_from_dict(cookies)
 
     def request(self, method, url, **kwargs):
         headers = kwargs.pop('headers', None) or {}
@@ -55,68 +63,24 @@ class RdioSession(requests.Session):
 
         url = self.api_url + method
 
-        params = merge(default_params, params)
-        headers = merge(default_headers, headers)
+        params = merge(default_params, params or {})
+        headers = merge(default_headers, headers or {})
 
         return self.post(url, data=params, headers=headers)
 
-    def authorize_oauth_token(self, authorization_url, username, password):
-        auth_page = self.get(authorization_url)
+    def signin(self, username, password):
+        signin = self.get(SIGNIN_URL)
 
-        api_version = self.api_version
+        if not self.api_version:
+            self.api_version = extract_api_version(self.env['version']['version'])
 
-        if not api_version:
-            api_version = fetch_api_version(self.env['version']['version'])
-            self.api_version = api_version
+        signin_headers = {'Referer': SIGNIN_URL}
 
-        oauth_token = dict(parse_qsl(urlparse(auth_page.url).query))
-        oauth_token = oauth_token.get('oauth_token')
+        signin = self.api_call('signIn', remember=1, nextUrl=u'',
+                               username=username, password=password,
+                               headers=signin_headers)
 
-        oauth_state = self.api_post('getOAuth1State', {
-            'token': oauth_token,
-        }, headers={'Referer': auth_page.url}).json()
-
-        # 491: Requires login
-        if oauth_state['code'] == 491:
-            login_url = u'?'.join([
-                u'https://www.rdio.com/account/signin/',
-                urlencode({'allowCreate': 1, 'next': auth_page.url}),
-            ])
-
-            login_page = self.get(login_url)
-
-            login = self.api_post('signIn', {
-                'username': username,
-                'password': password,
-                'remember': 1,
-                'nextUrl': auth_page.url,
-            }).json()
-
-            if not login['status'] == u'ok':
-                raise AuthorizationError(u'Invalid credentials')
-
-            auth_page = self.get(login['result']['redirect_url'])
-
-            oauth_state = self.api_post('getOAuth1State', {
-                'token': oauth_token,
-            }, headers={'Referer': auth_page.url}).json()
-
-        if not oauth_state.get('result'):
-            raise AuthorizationError(u"Failed to authorize application: `{0}'"\
-                            .format(oauth_state['message']))
-
-        oauth_verifier = oauth_state['result']['verifier']
-
-        if not oauth_state['result']['isAuthorized']:
-            approve = self.api_post('approveOAuth1App', {
-                'token': oauth_token,
-                'verifier': oauth_verifier,
-            }, headers={'Referer': auth_page.url}).json()
-
-            if not approve['status'] == u'ok':
-                raise AuthorizationError(u"Failed to approve application.")
-
-        return oauth_verifier
+        import pdb; pdb.set_trace()
 
 
 def merge(*args):
