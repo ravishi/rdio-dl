@@ -8,18 +8,12 @@ from youtube_dl.extractor.common import InfoExtractor
 
 from .oauth import RdioOAuth1Session
 from .config import config_load
-from .authorization import RdioAuthorizationSession
+from .session import RdioSession
 
 from requests.cookies import cookiejar_from_dict
 
 
 RDIO_HOST = u'www.rdio.com'
-
-RDIO_PLAYBACK_SECRET = u'6JSuiNxJ2cokAK9T2yWbEOPX'
-
-RDIO_PLAYBACK_SECRET_SEED = 5381
-
-AMF_ENDPOINT = u'https://www.rdio.com/api/1/amf/'
 
 
 def random_player_id():
@@ -54,7 +48,7 @@ class RdioIE(InfoExtractor):
         self.oauth = RdioOAuth1Session(client_key=config['apikey'],
                                        client_secret=config['secret'],
                                        callback_uri='oob')
-        self.session = RdioAuthorizationSession()
+        self.session = RdioSession()
 
         state = config['storage'].load(username)
         state = None

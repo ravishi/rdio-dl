@@ -9,31 +9,30 @@ class AuthorizationError(Exception):
     pass
 
 
-class RdioAuthorizationSession(requests.Session):
-
-    api_url = u'https://www.rdio.com/api/1/'
-
-    api_version = None
-
-    authorization_key = None
+class RdioSession(requests.Session):
 
     user_agent = (u'Mozilla/5.0 (X11; Linux i686) AppleWebKit/535.1'
                   u' (KHTML, like Gecko) Chrome/13.0.782.99 Safari/535.1')
 
+    api_url = u'https://www.rdio.com/api/1/'
+    api_version = None
+
     def __init__(self, *args, **kwargs):
-        self.env = None
         self.user_agent = kwargs.pop('user_agent', self.user_agent)
+        self.api_url = kwargs.pop('api_url', self.api_url)
         self.api_version = kwargs.pop('api_version', self.api_version)
-        self.authorization_key = kwargs.pop('authorization_key', self.authorization_key)
-        super(RdioAuthorizationSession, self).__init__(*args, **kwargs)
+
+        self.env = kwargs.pop('env', None)
+        self.authorization_key = kwargs.pop('authorization_key', None)
+
+        super(RdioSession, self).__init__(*args, **kwargs)
 
     def request(self, method, url, **kwargs):
         headers = kwargs.pop('headers', None) or {}
         headers.setdefault('User-Agent', self.user_agent)
 
-        resp = super(RdioAuthorizationSession, self).request(method, url,
-                                                             headers=headers,
-                                                             **kwargs)
+        resp = super(RdioSession, self)\
+                .request(method, url, headers=headers, **kwargs)
 
         if u'://www.rdio.com' in resp.request.url and u'Env' in resp.text:
             self.env = extract_env(resp.text)
@@ -42,20 +41,24 @@ class RdioAuthorizationSession(requests.Session):
         return resp
 
     def api_post(self, method, params, headers=None):
-
-        headers = merge({
-            'X-Requested-With': u'XMLHttpRequest',
-            'Host': u'www.rdio.com',
-            'Origin': u'https://www.rdio.com',
-        }, headers or {})
-
-        params = merge({
+        default_params = {
             'v': self.api_version,
             'method': method,
             '_authorization_key': self.authorization_key,
-        }, params or {})
+        }
 
-        return self.post(self.api_url + method, data=params, headers=headers)
+        default_headers = {
+            'X-Requested-With': u'XMLHttpRequest',
+            'Host': u'www.rdio.com',
+            'Origin': u'https://www.rdio.com',
+        }
+
+        url = self.api_url + method
+
+        params = merge(default_params, params)
+        headers = merge(default_headers, headers)
+
+        return self.post(url, data=params, headers=headers)
 
     def authorize_oauth_token(self, authorization_url, username, password):
         auth_page = self.get(authorization_url)

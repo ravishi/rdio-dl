@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from rdio_dl.authorization import extract_env, fetch_api_version
+from rdio_dl.session import extract_env, fetch_api_version
 
 
 @pytest.fixture(scope='module')
