@@ -13,7 +13,7 @@ class RdioAuthorizationSession(requests.Session):
 
     api_url = u'https://www.rdio.com/api/1/'
 
-    api_version = u'20130823'
+    api_version = None
 
     authorization_key = None
 
@@ -21,6 +21,7 @@ class RdioAuthorizationSession(requests.Session):
                   u' (KHTML, like Gecko) Chrome/13.0.782.99 Safari/535.1')
 
     def __init__(self, *args, **kwargs):
+        self.env = None
         self.user_agent = kwargs.pop('user_agent', self.user_agent)
         self.api_version = kwargs.pop('api_version', self.api_version)
         self.authorization_key = kwargs.pop('authorization_key', self.authorization_key)
@@ -34,8 +35,9 @@ class RdioAuthorizationSession(requests.Session):
                                                              headers=headers,
                                                              **kwargs)
 
-        if u'Env' in resp.text:
-            self.authorization_key = extract_authorization_key(resp.text)
+        if u'://www.rdio.com' in resp.request.url and u'Env' in resp.text:
+            self.env = extract_env(resp.text)
+            self.authorization_key = self.env['currentUser']['authorizationKey']
 
         return resp
 
@@ -50,31 +52,19 @@ class RdioAuthorizationSession(requests.Session):
         params = merge({
             'v': self.api_version,
             'method': method,
-            'extras[]': u'*.WEB',
             '_authorization_key': self.authorization_key,
         }, params or {})
 
         return self.post(self.api_url + method, data=params, headers=headers)
 
-    def fetch_api_version(self):
-        rdio_json_url = u'http://www.rdio.com/media/fresh/now/targets/rdio.json'
-
-        rdio_json = self.get(rdio_json_url).json()
-
-        rdio_core_url = '/'.join([
-            'http://rdio2-a.akamaihd.net/media/',
-            rdio_json['scripts'][0][0],
-            rdio_json['scripts'][0][1][0],
-        ])
-
-        rdio_core_page = self.get(rdio_core_url)
-
-        return extract_api_version(rdio_core_page.text)
-
     def authorize_oauth_token(self, authorization_url, username, password):
-        api_version = self.api_version or self.fetch_api_version()
-
         auth_page = self.get(authorization_url)
+
+        api_version = self.api_version
+
+        if not api_version:
+            api_version = fetch_api_version(self.env['version']['version'])
+            self.api_version = api_version
 
         oauth_token = dict(parse_qsl(urlparse(auth_page.url).query))
         oauth_token = oauth_token.get('oauth_token')
@@ -142,26 +132,37 @@ def merge(*args):
     return r
 
 
+def extract_env(html):
+    env = re.search(r'Env = {.*\n\s+};', html, flags=re.M | re.S)
+
+    if env:
+        env = env.group(0).replace('VERSION', '"version"')\
+                .replace('currentUser', '"currentUser"')\
+                .replace('serverInfo', '"serverInfo"')[6:-1].strip()
+
+        return json.loads(env)
+
+    else:
+        return None
+
+
 def extract_api_version(html):
     m = re.search(r'var API_VERSION ?= ?(?P<version>20\d{6})', html)
     return m.group('version')
 
 
-def extract_authorization_key(html):
-    env = re.search(r'Env = {.*\n\s+};', html, flags=re.M | re.S)
+def fetch_api_version(version):
+    rdio_json_url = u'/'.join(
+        [u'http://www.rdio.com/media/client/targets', version, u'rdio.json'])
 
-    if env:
-        env = env.group(0)
-        env = env.replace('VERSION', '"VERSION"')\
-                .replace('currentUser', '"currentUser"')\
-                .replace('serverInfo', '"serverInfo"')[6:-1].strip()
-        env = json.loads(env)
-        return env['currentUser']['authorizationKey']
+    rdio_json = requests.get(rdio_json_url).json()
 
-    math = re.search(r'authorizationKey *= *"(?P<authorization_key>[^"]+)";?',
-                  html, flags=re.M | re.S)
+    rdio_core_url = u''.join([
+        u'http://rdio0-a.akamaihd.net/media/',
+        rdio_json['scripts'][0][0],
+        rdio_json['scripts'][0][1][0],
+    ])
 
-    if match:
-        return m.group('authorization_key')
+    rdio_core_page = requests.get(rdio_core_url)
 
-    return None
+    return extract_api_version(rdio_core_page.text)

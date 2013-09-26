@@ -57,6 +57,7 @@ class RdioIE(InfoExtractor):
         self.session = RdioAuthorizationSession()
 
         state = config['storage'].load(username)
+        state = None
 
         if state is not None:
             self.oauth.set_access_token(state.get('access_token'))
