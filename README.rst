@@ -2,29 +2,35 @@ rdio-dl
 =======
 
 
-A youtube-dl extension that lets you download songs from Rdio.
+A **youtube-dl** extension that lets you download songs from Rdio.
+
+
+Installation
+------------
+
+
+The recommended way to install it is through **pip**.
+
+Since the current published version of **youtube-dl** does not support
+external extractors, you'll have to install it from my fork:
+
+.. code:: bash
+
+    $ pip install -e git+https://github.com/ravishi/youtube-dl.git@extractors-entry-points#egg=youtube_dl
+
+Then install **rdio-dl**:
+
+.. code:: bash
+
+    $ pip install -e git+https://github.com/ravishi/rdio-dl.git#egg=rdio_dl
 
 
 Usage
 -----
 
-In order to use *rdio-dl* you must have an API key and a secret for the
-Rdio API.
-
-Put that information in a file named `~/.rdio-dl/config.ini` like this:
-
-.. code:: ini
-
-    [rdio-dl]
-    apikey = XXXXXXXXXXX
-    secret = XXXXXXXXXXX
-
-
-Now, just run youtube-dl with your Rdio credentials and a song URL:
+Simply call **youtube-dl** with your Rdio credentials and a Rdio song
+url.
 
 .. code:: bash
 
-    $ youtube-dl -x -u username -p password "http://rd.io/x/QRmpxDdNqww/"
-
-
-Enjoy!
+    $ youtube-dl -x -u <username> -p <password> "http://rd.io/x/QRmpxDdNqww/"
