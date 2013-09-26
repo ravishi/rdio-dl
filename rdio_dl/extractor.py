@@ -6,11 +6,8 @@ from os.path import expanduser
 from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
 
-from .config import config_load
+from .config import storage_load
 from .session import RdioSession
-
-
-RDIO_HOST = u'www.rdio.com'
 
 
 def random_player_id():
@@ -23,8 +20,6 @@ class RdioIE(InfoExtractor):
                       (?:(?:(?:www\.)?rdio.com/artist/(?P<artist>.*)
                           /album/(?P<album>.*)/track/(?P<track>.*)/$)
                        |(?:rd.io/x/[\w\d-]+/$))'''
-
-    CONFIG_FILE = expanduser(u'~/.rdio-dl/config.ini')
 
     URLINFO = r'(?P<full>https?://(?:www\.)?rdio\.com/(?P<track>(?P<album>(?P<artist>artist/[^\/]+/)album/[^\/]+/)track/[^\/]+/?))'
 
@@ -42,9 +37,9 @@ class RdioIE(InfoExtractor):
         if not (username and password):
             raise ExtractorError(u"Please specify a username and password pair")
 
-        config = config_load(self.CONFIG_FILE)
+        storage = storage_load()
 
-        state = config['storage'].load(username)
+        state = storage.load(username)
 
         if state is not None:
             self.session = RdioSession(
@@ -54,7 +49,7 @@ class RdioIE(InfoExtractor):
             self.session = RdioSession()
             self.session.signin(username, password)
 
-        config['storage'].save(username, {
+        storage.save(username, {
             'cookies': dict(self.session.cookies),
         })
 

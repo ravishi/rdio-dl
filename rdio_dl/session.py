@@ -29,7 +29,7 @@ class RdioSession(requests.Session):
         self.env = kwargs.pop('env', None)
         self.authorization_key = kwargs.pop('authorization_key', None)
 
-        cookies = kwargs.pop('cookies')
+        cookies = kwargs.pop('cookies', {})
 
         super(RdioSession, self).__init__(*args, **kwargs)
 
@@ -72,15 +72,13 @@ class RdioSession(requests.Session):
         signin = self.get(SIGNIN_URL)
 
         if not self.api_version:
-            self.api_version = extract_api_version(self.env['version']['version'])
+            self.api_version = fetch_api_version(self.env['version']['version'])
 
-        signin_headers = {'Referer': SIGNIN_URL}
+        signin_headers = dict(Referer=SIGNIN_URL)
+        signin_params = dict(username=username, password=password,
+                             remember=1, nextUrl=u'')
 
-        signin = self.api_call('signIn', remember=1, nextUrl=u'',
-                               username=username, password=password,
-                               headers=signin_headers)
-
-        import pdb; pdb.set_trace()
+        self.api_post('signIn', params=signin_params, headers=signin_headers)
 
 
 def merge(*args):

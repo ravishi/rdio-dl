@@ -1,46 +1,21 @@
 import json
 import sqlite3
-from os.path import exists, expanduser
+from os.path import dirname, exists, expanduser
 from ConfigParser import ConfigParser
 from youtube_dl.utils import ExtractorError
 
 
-DEFAULT_STATE_FILE = u'~/.rdio-dl/state'
+DBPATH = u'~/.rdio-dl/session.sqlite'
 
 
-class ConfigurationError(Exception):
-    pass
+def storage_load():
 
+    path = expanduser(DBPATH)
 
-def config_load(path):
+    if not exists(dirname(path)):
+        mkdir(dirname(path))
 
-    config = ConfigParser()
-    config.read(path)
-
-    if not 'rdio-dl' in config.sections():
-        raise ConfigurationError(u"Missing `rdio-dl' section")
-
-    config = dict(config.items('rdio-dl'))
-
-    apikey = config.get('apikey')
-    secret = config.get('secret')
-
-    if not (apikey and secret):
-        raise ConfigurationError(
-            u"Required values `apikey' and `secret' are missing"
-        )
-
-    statefile = config.get('statefile', DEFAULT_STATE_FILE)
-
-    statefile = expanduser(statefile)
-
-    storage = StateStorage(statefile)
-
-    return {
-        'apikey': apikey,
-        'secret': secret,
-        'storage': storage,
-    }
+    return StateStorage(path)
 
 
 class StateStorage(object):
