@@ -88,6 +88,12 @@ class RdioIE(InfoExtractor):
                          'Label.name', 'Label.url', 'review', 'playlistCount'],
         }, headers={'Referer': album_page.url}).json()
 
+        # XXX seems like this is not consistent? sometimes tracks has an
+        # 'items' list, sometimes not. weird.
+        tracks = album['result']['tracks']
+        if 'items' in tracks:
+            tracks = tracks['items']
+
         for track in album['result']['tracks']:
             if track['url'][1:] == urlinfo.group('track'):
                 break
