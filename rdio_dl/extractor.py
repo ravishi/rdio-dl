@@ -94,7 +94,7 @@ class RdioIE(InfoExtractor):
         if 'items' in tracks:
             tracks = tracks['items']
 
-        for track in album['result']['tracks']:
+        for track in tracks:
             if track['url'][1:] == urlinfo.group('track'):
                 break
 
