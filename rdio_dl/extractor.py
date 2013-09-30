@@ -1,6 +1,8 @@
 import re
 import math
 import random
+import time
+
 from os.path import expanduser
 
 from youtube_dl.utils import ExtractorError
@@ -10,8 +12,24 @@ from .config import storage_load
 from .session import RdioSession
 
 
+API_VERSION_EXPIRATION = 24 * 3600       # should last for one day
+
+
 def random_player_id():
-    return unicode(int(math.floor(random.random() * 1000000)))[:6]
+    return unicode(int(math.floor(random.random() * 1000000)))
+
+
+def retrieve_api_version_if_not_expired(state,
+                                        expiration=API_VERSION_EXPIRATION):
+    timestamp = state.get('api_version_timestamp')
+
+    if not timestamp:
+        return
+
+    if time.time() < (timestamp + expiration):
+        return state.get('api_version')
+
+    return None
 
 
 class RdioIE(InfoExtractor):
@@ -44,6 +62,7 @@ class RdioIE(InfoExtractor):
         if state is not None:
             self.session = RdioSession(
                 cookies=state.get('cookies', {}),
+                api_version=retrieve_api_version_if_not_expired(state),
             )
         else:
             self.session = RdioSession()
@@ -51,6 +70,8 @@ class RdioIE(InfoExtractor):
 
         storage.save(username, {
             'cookies': dict(self.session.cookies),
+            'api_version': self.session.api_version,
+            'api_version_timestamp': time.time(),
         })
 
     def _real_extract(self, url):
