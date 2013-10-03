@@ -1,6 +1,7 @@
 import json
 import sqlite3
-from os.path import dirname, exists, expanduser
+from os import mkdir
+from os.path import dirname, exists, expanduser, mkdir
 from ConfigParser import ConfigParser
 from youtube_dl.utils import ExtractorError
 
