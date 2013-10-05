@@ -6,7 +6,6 @@ from requests.cookies import cookiejar_from_dict
 
 
 API_URL = u'https://www.rdio.com/api/1/'
-SIGNIN_URL = u'https://www.rdio.com/account/signin/'
 
 
 class AuthorizationError(Exception):
@@ -68,17 +67,10 @@ class RdioSession(requests.Session):
 
         return self.post(url, data=params, headers=headers)
 
-    def signin(self, username, password):
-        signin = self.get(SIGNIN_URL)
-
+    # XXX this is dumb.
+    def _ensure_we_have_the_api_version(self):
         if not self.api_version:
             self.api_version = fetch_api_version(self.env['version']['version'])
-
-        signin_headers = dict(Referer=SIGNIN_URL)
-        signin_params = dict(username=username, password=password,
-                             remember=1, nextUrl=u'')
-
-        self.api_post('signIn', params=signin_params, headers=signin_headers)
 
 
 def merge(*args):
@@ -131,3 +123,23 @@ def fetch_api_version(version):
     rdio_core_page = requests.get(rdio_core_url)
 
     return extract_api_version(rdio_core_page.text)
+
+
+def _convert_list(value):
+    return [_convert_value(v) for v in value]
+
+
+def _convert_value(value):
+    if isinstance(value, (list, tuple)):
+        return _convert_list(value)
+    elif isinstance(value, bool):
+        return json.dumps(value)
+    else:
+        return value
+
+
+def convert_params(params):
+    result = dict(params)
+    for key, value in result.items():
+        result[key] = _convert_value(value)
+    return result

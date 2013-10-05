@@ -13,6 +13,7 @@ from .session import RdioSession
 
 
 API_VERSION_EXPIRATION = 24 * 3600       # should last for one day
+SIGNIN_URL = u'https://www.rdio.com/account/signin/'
 
 
 def random_player_id():
@@ -48,6 +49,27 @@ class RdioIE(InfoExtractor):
     def get_param(self, param, default=None):
         return self._downloader.params.get(param, default)
 
+    def _signin(self, username, password):
+        signin = self.session.get(SIGNIN_URL)
+
+        # XXX this is dumb
+        self.session._ensure_we_have_the_api_version()
+
+        signin_headers = dict(Referer=SIGNIN_URL)
+        signin_params = dict(username=username, password=password,
+                             remember=1, nextUrl=u'')
+
+        signin = self.session.api_post('signIn', params=signin_params,
+                                       headers=signin_headers).json()
+
+        if not signin.get('result', {}).get('success'):
+            reason = signin.get('message', u"Unknown reason")
+            raise ExtractorError(u"Failed to signin: `{0}'".format(reason))
+
+        self.session.get(signin['result']['redirect_url'])
+
+        return True
+
     def _real_initialize(self):
         username = self.get_param('username')
         password = self.get_param('password')
@@ -66,7 +88,7 @@ class RdioIE(InfoExtractor):
             )
         else:
             self.session = RdioSession()
-            self.session.signin(username, password)
+            self._signin(username, password)
 
         storage.save(username, {
             'cookies': dict(self.session.cookies),
@@ -80,8 +102,6 @@ class RdioIE(InfoExtractor):
         album_page = self.session.get(url)
 
         urlinfo = re.match(self.URLINFO, album_page.url)
-
-        tos = self.session.api_post('getTOSVersion', params={}).json()['result']
 
         album = self.session.api_post('getObjectFromUrl', {
             'url': urlinfo.group('album'),
@@ -120,9 +140,6 @@ class RdioIE(InfoExtractor):
                 u"Failed to get playback information: `{0}'".format(reason))
 
         url = playback_info['result']['surl']
-
-        if not u'full-192.mp3' in url:
-            raise ExtractorError(u"Failed to retrieve the streaming url")
 
         return {
             'id': track['key'],
