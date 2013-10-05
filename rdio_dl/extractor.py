@@ -81,6 +81,8 @@ class RdioIE(InfoExtractor):
 
         urlinfo = re.match(self.URLINFO, album_page.url)
 
+        tos = self.session.api_post('getTOSVersion', params={}).json()['result']
+
         album = self.session.api_post('getObjectFromUrl', {
             'url': urlinfo.group('album'),
             'extras[]': ['*.WEB', 'bigIcon', 'bigIcon1200', 'tracks',
@@ -100,19 +102,27 @@ class RdioIE(InfoExtractor):
 
         player_name = u'_web_{0}'.format(random_player_id())
 
-        playback_info = self.session.api_post('getPlaybackInfo', {
+        r = self.session.api_post('getPlaybackInfo', {
             'key': track['key'],
-            'manualPlay': False,
+            'manualPlay': True,
             'playerName': player_name,
             'requiresUnlimited': False,
             'finishedAd': False,
             'type': u'mp3-high',
-        }).json()
+            'extras[]': '*.WEB',
+        })
+
+        playback_info = r.json()
 
         if not playback_info.get('result'):
             reason = playback_info.get('message', u"Unknown error")
             raise ExtractorError(
                 u"Failed to get playback information: `{0}'".format(reason))
+
+        url = playback_info['result']['surl']
+
+        if not u'full-192.mp3' in url:
+            raise ExtractorError(u"Failed to retrieve the streaming url")
 
         return {
             'id': track['key'],
@@ -121,5 +131,5 @@ class RdioIE(InfoExtractor):
             'description': u'',
             'thumbnail': track['icon'],
             'ext': 'mp3',
-            'url': playback_info['result']['surl'],
+            'url': url,
         }

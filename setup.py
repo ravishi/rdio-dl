@@ -27,7 +27,7 @@ setup(
     name='rdio_dl',
     version='0.0.1dev',
     packages=['rdio_dl'],
-    install_requires=['youtube_dl', 'requests'],
+    install_requires=['requests'],
     author='Dirley Rodrigues',
     author_email='dirleyrls@gmail.com',
     long_description=README,
