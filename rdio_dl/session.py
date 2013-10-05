@@ -123,23 +123,3 @@ def fetch_api_version(version):
     rdio_core_page = requests.get(rdio_core_url)
 
     return extract_api_version(rdio_core_page.text)
-
-
-def _convert_list(value):
-    return [_convert_value(v) for v in value]
-
-
-def _convert_value(value):
-    if isinstance(value, (list, tuple)):
-        return _convert_list(value)
-    elif isinstance(value, bool):
-        return json.dumps(value)
-    else:
-        return value
-
-
-def convert_params(params):
-    result = dict(params)
-    for key, value in result.items():
-        result[key] = _convert_value(value)
-    return result
