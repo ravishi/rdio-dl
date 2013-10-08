@@ -8,10 +8,6 @@ from requests.cookies import cookiejar_from_dict
 API_URL = u'https://www.rdio.com/api/1/'
 
 
-class AuthorizationError(Exception):
-    pass
-
-
 class RdioSession(requests.Session):
 
     user_agent = (u'Mozilla/5.0 (X11; Linux i686) AppleWebKit/535.1'
