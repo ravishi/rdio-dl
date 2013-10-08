@@ -17,7 +17,9 @@ class RdioSession(requests.Session):
     api_version = None
 
     def __init__(self, *args, **kwargs):
+
         self.user_agent = kwargs.pop('user_agent', self.user_agent)
+
         self.api_url = kwargs.pop('api_url', self.api_url)
         self.api_version = kwargs.pop('api_version', self.api_version)
 
@@ -44,6 +46,9 @@ class RdioSession(requests.Session):
         return resp
 
     def api_post(self, method, params, headers=None):
+        if not self.api_version:
+            self.api_version = fetch_api_version(self.env['version']['version'])
+
         default_params = {
             'v': self.api_version,
             'method': method,
@@ -63,14 +68,9 @@ class RdioSession(requests.Session):
 
         return self.post(url, data=params, headers=headers)
 
-    # XXX this is dumb.
-    def _ensure_we_have_the_api_version(self):
-        if not self.api_version:
-            self.api_version = fetch_api_version(self.env['version']['version'])
-
 
 def merge(*args):
-    """Merges the given dicts in reverse order.
+    """Merge the given dicts in reverse order.
 
     ::
 

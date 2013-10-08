@@ -52,9 +52,6 @@ class RdioIE(InfoExtractor):
     def _signin(self, username, password):
         signin = self.session.get(SIGNIN_URL)
 
-        # XXX this is dumb
-        self.session._ensure_we_have_the_api_version()
-
         signin_headers = dict(Referer=SIGNIN_URL)
         signin_params = dict(username=username, password=password,
                              remember=1, nextUrl=u'')
@@ -82,18 +79,24 @@ class RdioIE(InfoExtractor):
         state = storage.load(username)
 
         if state is not None:
+            api_version, api_version_timestamp =\
+                    retrieve_api_version_if_not_expired(state)
+
             self.session = RdioSession(
                 cookies=state.get('cookies', {}),
-                api_version=retrieve_api_version_if_not_expired(state),
+                api_version=api_version,
             )
         else:
             self.session = RdioSession()
             self._signin(username, password)
 
+            api_version = self.session.api_version
+            api_version_timestamp = time.time()
+
         storage.save(username, {
             'cookies': dict(self.session.cookies),
-            'api_version': self.session.api_version,
-            'api_version_timestamp': time.time(),
+            'api_version': api_version,
+            'api_version_timestamp': api_version_timestamp,
         })
 
     def _real_extract(self, url):
@@ -122,7 +125,7 @@ class RdioIE(InfoExtractor):
 
         player_name = u'_web_{0}'.format(random_player_id())
 
-        r = self.session.api_post('getPlaybackInfo', {
+        playback_info = self.session.api_post('getPlaybackInfo', {
             'key': track['key'],
             'manualPlay': True,
             'playerName': player_name,
@@ -130,9 +133,7 @@ class RdioIE(InfoExtractor):
             'finishedAd': False,
             'type': u'mp3-high',
             'extras[]': '*.WEB',
-        })
-
-        playback_info = r.json()
+        }).json()
 
         if not playback_info.get('result'):
             reason = playback_info.get('message', u"Unknown error")
