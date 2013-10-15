@@ -24,13 +24,10 @@ def retrieve_api_version_if_not_expired(state,
                                         expiration=API_VERSION_EXPIRATION):
     timestamp = state.get('api_version_timestamp')
 
-    if not timestamp:
-        return
+    if timestamp and time.time() < (timestamp + expiration):
+        return (state.get('api_version'), timestamp)
 
-    if time.time() < (timestamp + expiration):
-        return state.get('api_version')
-
-    return None
+    return (None, None)
 
 
 class RdioIE(InfoExtractor):
@@ -40,7 +37,9 @@ class RdioIE(InfoExtractor):
                           /album/(?P<album>.*)/track/(?P<track>.*)/$)
                        |(?:rd.io/x/[\w\d-]+/$))'''
 
-    URLINFO = r'(?P<full>https?://(?:www\.)?rdio\.com/(?P<track>(?P<album>(?P<artist>artist/[^\/]+/)album/[^\/]+/)track/[^\/]+/?))'
+    URL_GROUPS = r'''^(?P<full>https?://(?:www\.)?rdio\.com/
+                        (?P<track>(?P<album>(?P<artist>artist/[^\/]+/)
+                          album/[^\/]+/)track/[^\/]+/?))'''
 
     @classmethod
     def suitable(cls, url):
@@ -99,29 +98,34 @@ class RdioIE(InfoExtractor):
             'api_version_timestamp': api_version_timestamp,
         })
 
-    def _real_extract(self, url):
-        # short urls will end in redirect to the right page
-        # this will also update the authorization key of the session
-        album_page = self.session.get(url)
-
-        urlinfo = re.match(self.URLINFO, album_page.url)
+    def _get_track_object_from_page(self, page):
+        urls = re.match(self.URL_GROUPS, page.url, flags=re.VERBOSE).groupdict()
 
         album = self.session.api_post('getObjectFromUrl', {
-            'url': urlinfo.group('album'),
+            'url': urls['album'],
             'extras[]': ['*.WEB', 'bigIcon', 'bigIcon1200', 'tracks',
                          'playCount', 'copyrights', 'labels', '-Label.*',
                          'Label.name', 'Label.url', 'review', 'playlistCount'],
-        }, headers={'Referer': album_page.url}).json()
+        }, headers={'Referer': page.url}).json()
 
-        # XXX seems like this is not consistent? sometimes tracks has an
-        # 'items' list, sometimes not. weird.
+        # XXX sometimes the tracks are listed inside result.tracks, sometimes
+        # they're inside result.tracks.items. I don't know why.
+
         tracks = album['result']['tracks']
+
         if 'items' in tracks:
             tracks = tracks['items']
 
         for track in tracks:
-            if track['url'][1:] == urlinfo.group('track'):
+            if track['url'][1:] == urls['track']:
                 break
+
+        return track
+
+    def _real_extract(self, url):
+        track_page = self.session.get(url)
+
+        track = self._get_track_object_from_page(track_page)
 
         player_name = u'_web_{0}'.format(random_player_id())
 
