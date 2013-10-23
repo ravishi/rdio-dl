@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from rdio_dl.session import extract_env, fetch_api_version
+from rdio_dl import utils
 
 
 @pytest.fixture(scope='module')
@@ -16,18 +16,19 @@ class State(object):
         return getattr(self, attr)
 
 
-def test_extract_env(st):
+def test_rdio_environment(st):
     signin = requests.get(u'http://www.rdio.com/account/signin')
 
-    st.env = extract_env(signin.text)
+    st.env = utils.extract_rdio_environment(signin.text)
 
     assert isinstance(st.env, dict)
-    assert 'version' in st.env.keys()
+    assert 'VERSION' in st.env.keys()
+    assert 'version' in st.env['VERSION']
 
 
-def test_extract_api_version(st):
-    env = st.require('env', test_extract_env)
+def test_rdio_api_version(st):
+    env = st.require('env', test_rdio_environment)
 
-    st.api_version = fetch_api_version(env['version']['version'])
+    st.api_version = utils.retrieve_rdio_api_version(env)
 
     assert st.api_version.isdigit() and len(st.api_version) == 8

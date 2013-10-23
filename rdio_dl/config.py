@@ -2,8 +2,6 @@ import json
 import sqlite3
 from os import mkdir
 from os.path import dirname, exists, expanduser
-from ConfigParser import ConfigParser
-from youtube_dl.utils import ExtractorError
 
 
 DBPATH = u'~/.rdio-dl/session.sqlite'
