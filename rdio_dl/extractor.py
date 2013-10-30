@@ -3,6 +3,7 @@ import math
 import random
 import requests
 import requests.cookies
+from requests.auth import AuthBase
 
 from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
@@ -44,9 +45,8 @@ class RdioIE(InfoExtractor):
         self.session = requests.Session()
         self.api_version = None
 
-        cookies = user_state.get('cookies')
-        if cookies is not None:
-            self.session.cookies = requests.cookies.cookiejar_from_dict(cookies)
+        cookies = user_state.get('cookies', {}) if user_state else {}
+        self.session.cookies = requests.cookies.cookiejar_from_dict(cookies)
 
     def _rdio_api_call(self, method, env, referer=None, **kwargs):
         if self.api_version is None:
