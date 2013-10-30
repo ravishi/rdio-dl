@@ -3,7 +3,6 @@ import math
 import random
 import requests
 import requests.cookies
-from requests.auth import AuthBase
 
 from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
