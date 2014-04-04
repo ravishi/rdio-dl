@@ -117,7 +117,7 @@ def retrieve_rdio_api_version(env):
         core_url = u''.join([
             u'http://',
             rb,
-            env['targets']['targetBase'],
+            rdio_json['scripts'][0][0],
             rdio_json['scripts'][0][1][0],
         ])
 

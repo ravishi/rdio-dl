@@ -18,7 +18,7 @@ SIGN_IN_URL = u"https://www.rdio.com/account/signin/"
 
 
 def random_player_id():
-    return unicode(int(math.floor(random.random() * 1000000)))
+    return unicode(int(math.floor(random.random() * 10000000)))
 
 
 class RdioIE(InfoExtractor):
@@ -115,8 +115,9 @@ class RdioIE(InfoExtractor):
         player_name = u'_web_{0}'.format(random_player_id())
 
         playback_info = self._rdio_api_call('getPlaybackInfo', env, key=track['key'],
-                                            manualPlay=True, playerName=player_name, requiresUnlimited=False,
-                                            finishedAd=False, type=u'mp3-high', extras=['*.WEB'])
+                                            manualPlay=True, playerName=player_name,
+                                            requiresUnlimited=False, finishedAd=False,
+                                            type=u'mp3-high', extras=['*.WEB'])
 
         if not playback_info.get('result'):
             reason = playback_info.get('message', u"Unknown error")
