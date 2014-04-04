@@ -1,3 +1,10 @@
+IT DOESN'T WORK
+===============
+
+
+Ok, **this doesn't work anymore**! And I can't update it right now. Sorry.
+
+
 rdio-dl
 =======
 
