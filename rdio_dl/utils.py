@@ -52,35 +52,84 @@ def extract_rdio_environment(html):
     """
     env = re.search(r'Env = {.*\n\s+};', html, flags=re.M | re.S)
 
-    if env:
-        env = env.group(0).replace('VERSION', '"VERSION"') \
-                  .replace('currentUser', '"currentUser"') \
-                  .replace('serverInfo', '"serverInfo"')
-        env = env[6:-1].strip()
-        return json.loads(env)
+    if not env:
+        return
 
-    return None
+    env = env.group(0).replace('VERSION', '"VERSION"') \
+                .replace('currentUser', '"currentUser"') \
+                .replace('serverInfo', '"serverInfo"')
+
+    env = env[6:-1].strip()
+
+    try:
+        env = json.loads(env)
+    except:
+        return
+
+    '''(Env.loadedTarget, {
+          environment: Env,
+          pathFactories: {
+            css: function(file) {
+              var fileName = file.file;
+              if (R.supportsDataUris && file.versions.datauri) {
+                fileName = fileName + '.datauri.' + file.versions.datauri;
+              } else if (file.versions.fallback) {
+                fileName = fileName + '.' + file.versions.fallback;
+              }
+              return fileName + '.css'
+            }
+          },
+          targetBase: '/media/client/targets/e5e51c9032f627fcf958ad0e6e310ba7ff84f35b/',
+          resourceBases: ['rdio0-a.akamaihd.net', 'rdio1-a.akamaihd.net', 'rdio2-a.akamaihd.net', 'rdio3-a.akamaihd.net'],
+          mainOptions: {},
+          dev: false,
+          unstyled: rule.unstyled
+        })'''
+
+    boot = re.search(r'\(\s*Env\.loadedTarget\s*,\s*\{(.*\}\s*)\)\s*;', html, flags=re.M | re.S)
+
+    if not boot:
+        return
+
+    boot = boot.group(0)
+
+    targets = [line.strip().strip(u',').strip()
+                for line in boot.splitlines() if u'Base' in line]
+
+    targets = [re.sub(r'^([^:\s]+)', r'"\1"', line) for line in targets]
+
+    targets = u'{' + (u',\n'.join(targets)) + u'}'
+
+    targets = targets.replace("'", '"')
+
+    env['targets'] = json.loads(targets)
+
+    return env
 
 
 def retrieve_rdio_api_version(env):
-    client_version = env['VERSION']['version']
-
     rdio_json_url = u'/'.join(
-        [u'http://www.rdio.com/media/client/targets', client_version, u'rdio.json'])
+        [u'http://www.rdio.com', env['targets']['targetBase'], u'rdio-marketing.json'])
 
     rdio_json = requests.get(rdio_json_url).json()
 
-    core_url = u''.join([
-        u'http://rdio0-a.akamaihd.net/media/',
-        rdio_json['scripts'][0][0],
-        rdio_json['scripts'][0][1][0],
-    ])
+    for rb in env['targets']['resourceBases']:
+        core_url = u''.join([
+            u'http://',
+            rb,
+            env['targets']['targetBase'],
+            rdio_json['scripts'][0][1][0],
+        ])
 
-    core = requests.get(core_url)
+        core = requests.get(core_url)
 
-    m = re.search(r'var API_VERSION ?= ?(?P<version>20\d{6})', core.text)
+        if core.status_code == 200:
+            m = re.search(r'var\s+API_VERSION\s?=\s?(?P<version>20\d{6})', core.text)
 
-    return m.group('version')
+            if m is not None:
+                return m.group('version')
+            else:
+                break
 
 
 def extract_rdio_url_groups(url):
