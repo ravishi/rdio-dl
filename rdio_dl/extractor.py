@@ -7,14 +7,19 @@ import requests.cookies
 from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
 
-from . import utils
 from .config import storage_load
+from .private_api import RdioSession
 
 
 USER_AGENT = (u"Mozilla/5.0 (X11; Linux i686) AppleWebKit/535.1"
               u" (KHTML, like Gecko) Chrome/13.0.782.99 Safari/535.1")
 
-SIGN_IN_URL = u"https://www.rdio.com/account/signin/"
+URL_GROUPS = (r'^(?P<full>https?://(?:www\.)?rdio\.com/'
+              r'(?P<track>(?P<album>(?P<artist>artist/[^\/]+/)album/[^\/]+/)track/[^\/]+/?))')
+
+
+def extract_rdio_url_groups(url):
+    return re.match(URL_GROUPS, url).groupdict()
 
 
 def random_player_id():
@@ -41,94 +46,81 @@ class RdioIE(InfoExtractor):
 
         user_state = storage.load(username)
 
-        self.session = requests.Session()
-        self.api_version = None
+        self.rdio = RdioSession()
 
-        cookies = user_state.get('cookies', {}) if user_state else {}
-        self.session.cookies = requests.cookies.cookiejar_from_dict(cookies)
+        if user_state:
+            self.rdio._authorization_key = user_state.get('authorization_key')
 
-    def _rdio_api_call(self, method, env, referer=None, **kwargs):
-        if self.api_version is None:
-            self.api_version = utils.retrieve_rdio_api_version(env)
+            cookies = user_state.get('cookies', {})
+            self.rdio.cookies = requests.cookies.cookiejar_from_dict(cookies)
 
-        authorization_key = env['currentUser']['authorizationKey']
+        if not self.rdio._authorization_key:
+            signin = self.rdio.sign_in(username, password)
 
-        req_kwargs = utils.rdio_api_request(method, version=self.api_version,
-                                            authorization_key=authorization_key, **kwargs)
-
-        if referer is not None:
-            req_kwargs.setdefault('headers', {}).update({'Referer': referer})
-
-        response = self.session.request(**req_kwargs)
-
-        return response.json()
-
-    def _sign_in(self, username, password):
-        signin_page = self.session.get(SIGN_IN_URL)
-
-        env = utils.extract_rdio_environment(signin_page.text)
-
-        signin = self._rdio_api_call('signIn', env, referer=signin_page.url,
-                                     username=username, password=password, remember=1, nextUrl=u'')
-
-        result = signin.get('result')
-
-        if result is None:
-            reason = signin.get('message', u"Unknown reason")
-            raise ExtractorError(u"Failed to sign in: `{0}'".format(reason))
-
-        if not result['success']:
-            raise ExtractorError(u"Invalid credentials")
-
-        return self.session.get(signin['result']['redirect_url'])
-
-    def _get_track_object(self, url, env):
+    def _get_track_object(self, url):
         """Get the track object from the given Rdio track *page*.
         """
-        urls = utils.extract_rdio_url_groups(url)
+        urls = extract_rdio_url_groups(url)
 
-        album = self._rdio_api_call('getObjectFromUrl', env, referer=url, url=urls['album'], extras=[
-            '*.WEB', 'bigIcon', 'bigIcon1200', 'tracks', 'playCount', 'copyrights',
-            'labels', '-Label.*', 'Label.name', 'Label.url', 'review', 'playlistCount'
-        ])
+        extras = ['*.WEB', 'bigIcon', 'bigIcon1200', 'tracks', 'playCount',
+                  'copyrights', 'labels', '-Label.*', 'Label.name',
+                  'Label.url', 'review', 'playlistCount']
 
-        tracks = album['result']['tracks']
+        album = self.rdio.api_call('getObjectFromUrl', url=urls['album'],
+                                   extras=extras, referer=url)
 
-        # XXX sometimes the tracks are listed inside result.tracks, sometimes
-        # they're inside result.tracks.items. Don't ask me why.
-        if 'items' in tracks:
-            tracks = tracks['items']
+        album = album.json()
+
+        if not album.get('result'):
+            return
+
+        tracks = album['result'].get('tracks', [])
+
+        # XXX sometimes tracks are listed inside `result.tracks`, while
+        # sometimes they are listd inside `result.tracks.items`
+        if isinstance(tracks, dict):
+            tracks = tracks.get('items', [])
 
         for track in tracks:
             if track['url'][1:] == urls['track']:
                 return track
 
-        return None
+    def _get_playback_info_through_http(self, key):
+        player_name = '_web_{0}'.format(random_player_id())
 
-    def _real_extract(self, url):
-        track_page = self.session.get(url)
+        playback_info = self.rdio.api_call('getPlaybackInfo',
+                                           key=key,
+                                           manualPlay=False,
+                                           playerName=player_name,
+                                           requiresUnlimited=False,
+                                           finishedAd=False,
+                                           type='mp3-high')
 
-        env = utils.extract_rdio_environment(track_page.text)
-
-        track = self._get_track_object(track_page.url, env)
-
-        player_name = u'_web_{0}'.format(random_player_id())
-
-        playback_info = self._rdio_api_call('getPlaybackInfo', env, key=track['key'],
-                                            manualPlay=True, playerName=player_name,
-                                            requiresUnlimited=False, finishedAd=False,
-                                            type=u'mp3-high', extras=['*.WEB'])
+        playback_info = playback_info.json()
 
         if not playback_info.get('result'):
-            reason = playback_info.get('message', u"Unknown error")
-            raise ExtractorError(u"Failed to get playback information: `{0}'".format(reason))
+            reason = playback_info.get('message', "Unknown error")
+            raise ExtractorError(
+                "Failed to get playback information: `{0}'".format(reason))
 
-        return {
+        return dict(url=playback_info['result']['surl'])
+
+    def _real_extract(self, url):
+        track_page = self.rdio.get(url)
+
+        track = self._get_track_object(track_page.url)
+
+        info = {
             'id': track['key'],
             'ext': u'mp3',
-            'url': playback_info['result']['surl'],
             'title': track['name'],
             'uploader': track['artist'],
             'description': u'',
             'thumbnail': track['icon'],
         }
+
+        playback_info = self._get_playback_info_through_http(track['key'])
+
+        info.update(playback_info)
+
+        return info

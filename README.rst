@@ -1,10 +1,3 @@
-IT DOESN'T WORK
-===============
-
-
-Ok, **this doesn't work anymore**! And I can't update it right now. Sorry.
-
-
 rdio-dl
 =======
 
@@ -19,13 +12,7 @@ Installation
 The recommended way to install it is through **pip**.
 
 Since the current published version of **youtube-dl** does not support
-external extractors, you'll have to install it from my fork:
-
-.. code:: bash
-
-    $ pip install -e git+https://github.com/ravishi/youtube-dl.git@extractors-entry-points#egg=youtube_dl
-
-Then install **rdio-dl**:
+external extractors, a forked version will be also be installed through pip.
 
 .. code:: bash
 
@@ -35,8 +22,7 @@ Then install **rdio-dl**:
 Usage
 -----
 
-Simply call **youtube-dl** with your Rdio credentials and a Rdio song
-url.
+Simply call **youtube-dl** with your Rdio credentials and a Rdio song url.
 
 .. code:: bash
 
