@@ -26,14 +26,7 @@ def random_player_id():
     return unicode(int(math.floor(random.random() * 10000000)))
 
 
-class RdioIE(InfoExtractor):
-    IE_DESC = u'Rdio'
-    _VALID_URL = r'''^(?:https?://)?(?:(?:(?:www\.)?rdio.com/
-                      artist/(?P<artist>.*)/album/(?P<album>.*)/track/(?P<track>.*)/$)|(?:rd\.io/x/[-\w\d]+/$))'''
-
-    @classmethod
-    def suitable(cls, url):
-        return re.match(cls._VALID_URL, url, flags=re.VERBOSE) is not None
+class BaseRdioIE(InfoExtractor):
 
     def _real_initialize(self):
         username = self._downloader.params.get('username')
@@ -55,19 +48,30 @@ class RdioIE(InfoExtractor):
             self.rdio.cookies = requests.cookies.cookiejar_from_dict(cookies)
 
         if not self.rdio._authorization_key:
-            signin = self.rdio.sign_in(username, password)
+            self.rdio.sign_in(username, password)
+
+            storage.save(username, {
+                'cookies': dict(self.rdio.cookies),
+                'authorization_key': self.rdio._authorization_key,
+            })
+
+
+class RdioIE(BaseRdioIE):
+    IE_DESC = u'Rdio'
+    _VALID_URL = r'''^(?:https?://)?(?:(?:(?:www\.)?rdio.com/
+                      artist/(?P<artist>.*)/album/(?P<album>.*)/track/(?P<track>.*)/$)|(?:rd\.io/x/[-\w\d]+/$))'''
+
+    @classmethod
+    def suitable(cls, url):
+        return re.match(cls._VALID_URL, url, flags=re.VERBOSE) is not None
 
     def _get_track_object(self, url):
         """Get the track object from the given Rdio track *page*.
         """
         urls = extract_rdio_url_groups(url)
 
-        extras = ['*.WEB', 'bigIcon', 'bigIcon1200', 'tracks', 'playCount',
-                  'copyrights', 'labels', '-Label.*', 'Label.name',
-                  'Label.url', 'review', 'playlistCount']
-
         album = self.rdio.api_call('getObjectFromUrl', url=urls['album'],
-                                   extras=extras, referer=url)
+                                   extras=['tracks'], referer=url)
 
         album = album.json()
 
@@ -124,3 +128,24 @@ class RdioIE(InfoExtractor):
         info.update(playback_info)
 
         return info
+
+
+class RdioPlaylistIE(BaseRdioIE):
+    IE_DESC = u'Rdio Playlist'
+    _VALID_URL = r'''^(?:https?://)?(?:www\.)?rdio.com/people/(?P<owner>.*)/playlists/(?P<playlist_id>.*)/(?P<title>.*)/?$'''
+
+    def _real_extract(self, url):
+        playlist = self.rdio.api_call('getObjectFromUrl', url=url,
+                                      extras=['tracks'])
+
+        playlist = playlist.json()['result']
+
+        tracks = playlist.get('tracks', [])
+
+        if isinstance(tracks, dict):
+            tracks = tracks.get('items', [])
+
+        entries = [self.url_result(t['shortUrl'], video_id=t['key'])
+                   for t in tracks]
+
+        return self.playlist_result(entries, playlist['key'], playlist['name'])

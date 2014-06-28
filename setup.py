@@ -37,6 +37,7 @@ setup(
     entry_points={
         'youtube_dl.extractors': [
             'rdio = rdio_dl.extractor:RdioIE',
+            'rdio_playlist = rdio_dl.extractor:RdioPlaylistIE',
         ],
     },
     test_suite='tests',
