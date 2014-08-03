@@ -26,4 +26,4 @@ Simply call **youtube-dl** with your Rdio credentials and a Rdio song url.
 
 .. code:: bash
 
-    $ youtube-dl -x -u <username> -p <password> "http://rd.io/x/QRmpxDdNqww/"
+    $ youtube-dl -u <username> -p <password> "http://rd.io/x/QRmpxDdNqww/"
