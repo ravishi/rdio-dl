@@ -14,19 +14,34 @@ from .private_api import RdioSession
 USER_AGENT = (u"Mozilla/5.0 (X11; Linux i686) AppleWebKit/535.1"
               u" (KHTML, like Gecko) Chrome/13.0.782.99 Safari/535.1")
 
-URL_GROUPS = (r'^(?P<full>https?://(?:www\.)?rdio\.com/'
-              r'(?P<track>(?P<album>(?P<artist>artist/[^\/]+/)album/[^\/]+/)track/[^\/]+/?))')
-
-
-def extract_rdio_url_groups(url):
-    return re.match(URL_GROUPS, url).groupdict()
-
 
 def random_player_id():
     return unicode(int(math.floor(random.random() * 10000000)))
 
 
-class BaseRdioIE(InfoExtractor):
+class RdioIE(InfoExtractor):
+    IE_DESC = u'Rdio'
+
+    @classmethod
+    def suitable(cls, url):
+        valid_urls = {
+            'track': (
+                r'^(?:https?://)?(?:www\.)?rdio\.com/artist/(?P<artist>[^\/]+)/'
+                r'album/(?P<album>[^\/]+)/track/(?P<track>[^\/]+)/?$'
+            ),
+            'album': (
+                r'^(?:https?://)?(?:www\.)?rdio\.com/artist/(?P<artist>[^\/]+)/'
+                r'album/(?P<album>[^\/]+)/?$'
+            ),
+            'playlist': (
+                r'^(?:https?://)?(?:www\.)?rdio\.com/people/(?P<owner>[^\/]+)/'
+                r'playlists/(?P<playlist_id>[^\/]+)/'
+                r'(?P<playlist_name>[^\/]+)/?$'
+            ),
+            'short': r'^(?:https?://)?rd\.io/x/[^\/]+/?$',
+        }
+
+        return any((re.match(test_re, url) for test_re in valid_urls.values()))
 
     def _real_initialize(self):
         username = self._downloader.params.get('username')
@@ -55,39 +70,17 @@ class BaseRdioIE(InfoExtractor):
                 'authorization_key': self.rdio._authorization_key,
             })
 
-
-class RdioIE(BaseRdioIE):
-    IE_DESC = u'Rdio'
-    _VALID_URL = r'''^(?:https?://)?(?:(?:(?:www\.)?rdio.com/
-                      artist/(?P<artist>.*)/album/(?P<album>.*)/track/(?P<track>.*)/$)|(?:rd\.io/x/[-\w\d]+/$))'''
-
-    @classmethod
-    def suitable(cls, url):
-        return re.match(cls._VALID_URL, url, flags=re.VERBOSE) is not None
-
-    def _get_track_object(self, url):
-        """Get the track object from the given Rdio track *page*.
+    def _get_object_from_url(self, url):
+        """Get a object (track, album, playlist) from the given URL.
         """
-        urls = extract_rdio_url_groups(url)
+        result = self.rdio.api_call('getObjectFromUrl', url=url,
+                                    extras=['tracks'], referer=url)
+        return result.json()
 
-        album = self.rdio.api_call('getObjectFromUrl', url=urls['album'],
-                                   extras=['tracks'], referer=url)
+        if not result.get('result'):
+            raise ExtractorError(result.get('message', u"Unknown error"))
 
-        album = album.json()
-
-        if not album.get('result'):
-            return
-
-        tracks = album['result'].get('tracks', [])
-
-        # XXX sometimes tracks are listed inside `result.tracks`, while
-        # sometimes they are listd inside `result.tracks.items`
-        if isinstance(tracks, dict):
-            tracks = tracks.get('items', [])
-
-        for track in tracks:
-            if track['url'][1:] == urls['track']:
-                return track
+        return result.get('result')
 
     def _get_playback_info_through_http(self, key):
         player_name = '_web_{0}'.format(random_player_id())
@@ -110,10 +103,32 @@ class RdioIE(BaseRdioIE):
         return dict(url=playback_info['result']['surl'])
 
     def _real_extract(self, url):
-        track_page = self.rdio.get(url)
+        obj = self._get_object_from_url(url)
 
-        track = self._get_track_object(track_page.url)
+        obj = obj.get('result')
 
+        typ = obj['type']
+
+        if typ == 't':
+            return self._extract_track(obj)
+
+        elif typ not in ('a', 'p'):
+            raise ExtractorError("Unknown object type: `{0}'".format(typ))
+
+        # deal with playlists and albums
+        tracks = obj.get('tracks', [])
+
+        # XXX sometimes the result is a list, sometimes its a dict with an
+        # items item
+        if isinstance(tracks, dict):
+            tracks = tracks.get('items', [])
+
+        entries = [self.url_result(t['shortUrl'], video_id=t['key'])
+                   for t in tracks]
+
+        return self.playlist_result(entries, obj['key'], obj['name'])
+
+    def _extract_track(self, track):
         info = {
             'id': track['key'],
             'ext': u'mp3',
@@ -128,24 +143,3 @@ class RdioIE(BaseRdioIE):
         info.update(playback_info)
 
         return info
-
-
-class RdioPlaylistIE(BaseRdioIE):
-    IE_DESC = u'Rdio Playlist'
-    _VALID_URL = r'''^(?:https?://)?(?:www\.)?rdio.com/people/(?P<owner>.*)/playlists/(?P<playlist_id>.*)/(?P<title>.*)/?$'''
-
-    def _real_extract(self, url):
-        playlist = self.rdio.api_call('getObjectFromUrl', url=url,
-                                      extras=['tracks'])
-
-        playlist = playlist.json()['result']
-
-        tracks = playlist.get('tracks', [])
-
-        if isinstance(tracks, dict):
-            tracks = tracks.get('items', [])
-
-        entries = [self.url_result(t['shortUrl'], video_id=t['key'])
-                   for t in tracks]
-
-        return self.playlist_result(entries, playlist['key'], playlist['name'])
