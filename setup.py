@@ -28,9 +28,6 @@ setup(
     version='0.0.1dev',
     packages=['rdio_dl'],
     install_requires=['requests', 'youtube_dl'],
-    dependency_links=[
-        'git+https://github.com/ravishi/youtube-dl.git@f77da1fae6#egg=youtube_dl',
-    ],
     author='Dirley Rodrigues',
     author_email='dirleyrls@gmail.com',
     long_description=README,

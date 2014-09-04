@@ -12,10 +12,11 @@ Installation
 The recommended way to install it is through **pip**.
 
 Since the current published version of **youtube-dl** does not support
-external extractors, a forked version will be also be installed through pip.
+external extractors, a forked version must be installed.
 
 .. code:: bash
 
+    $ pip install 'git+https://github.com/ravishi/youtube-dl.git#egg=youtube_dl'
     $ pip install 'git+https://github.com/ravishi/rdio-dl.git#egg=rdio_dl'
 
 
