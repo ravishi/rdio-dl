@@ -16,7 +16,7 @@ external extractors, a forked version will be also be installed through pip.
 
 .. code:: bash
 
-    $ pip install -e git+https://github.com/ravishi/rdio-dl.git#egg=rdio_dl
+    $ pip install 'git+https://github.com/ravishi/rdio-dl.git#egg=rdio_dl'
 
 
 Usage
