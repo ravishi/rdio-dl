@@ -16,7 +16,7 @@ external extractors, a forked version must be installed.
 
 .. code:: bash
 
-    $ pip install 'git+https://github.com/ravishi/youtube-dl.git#egg=youtube_dl'
+    $ pip install 'git+https://github.com/ravishi/youtube-dl.git@extractors-entry-points#egg=youtube_dl'
     $ pip install 'git+https://github.com/ravishi/rdio-dl.git#egg=rdio_dl'
 
 
