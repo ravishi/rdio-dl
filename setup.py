@@ -25,19 +25,15 @@ except IOError:
 
 setup(
     name='rdio_dl',
-    version='0.0.1dev',
+    version='0.0.2dev',
     packages=['rdio_dl'],
-    install_requires=['requests', 'youtube_dl'],
+    install_requires=['requests', 'youtube_dl', 'click'],
     author='Dirley Rodrigues',
     author_email='dirleyrls@gmail.com',
     long_description=README,
     license='MIT',
-    entry_points={
-        'youtube_dl.extractors': [
-            'rdio = rdio_dl.extractor:RdioIE',
-        ],
-    },
     test_suite='tests',
     tests_require=['pytest'],
     cmdclass={'test': PyTest},
+    scripts=['bin/rdio-dl'],
 )

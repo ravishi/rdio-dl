@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+
+import rdio_dl
+
+if __name__ == '__main__':
+    rdio_dl.main()
