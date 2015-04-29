@@ -31,6 +31,7 @@ setup(
     author='Dirley Rodrigues',
     author_email='dirleyrls@gmail.com',
     long_description=README,
+    license='MIT',
     entry_points={
         'youtube_dl.extractors': [
             'rdio = rdio_dl.extractor:RdioIE',
