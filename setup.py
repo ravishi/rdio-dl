@@ -2,6 +2,8 @@ import sys
 from setuptools import setup
 from setuptools.command.test import test as TestCommand
 
+from rdio_dl import __version__
+
 
 class PyTest(TestCommand):
     def finalize_options(self):
@@ -25,7 +27,7 @@ except IOError:
 
 setup(
     name='rdio_dl',
-    version='0.0.2dev',
+    version=__version__,
     packages=['rdio_dl'],
     install_requires=['requests', 'youtube_dl', 'click'],
     author='Dirley Rodrigues',

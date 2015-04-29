@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import rdio_dl
+import rdio_dl.cli
 
 if __name__ == '__main__':
-    rdio_dl.main()
+    rdio_dl.cli.main()

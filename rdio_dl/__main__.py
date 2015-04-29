@@ -8,7 +8,7 @@ if __package__ is None and not hasattr(sys, 'frozen'):
     path = os.path.realpath(os.path.abspath(__file__))
     sys.path.append(os.path.dirname(os.path.dirname(path)))
 
-import rdio_dl
+import rdio_dl.cli
 
 if __name__ == '__main__':
-    rdio_dl.main()
+    rdio_dl.cli.main()
