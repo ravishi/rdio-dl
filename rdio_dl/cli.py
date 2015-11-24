@@ -25,5 +25,6 @@ def add_info_extractor_above_generic(ydl, ie):
 def main(user, password, urls, quality):
     storage = storage_load()
     with youtube_dl.YoutubeDL() as ydl:
-        add_info_extractor_above_generic(ydl, RdioIE(storage, user, password, quality=quality))
+        add_info_extractor_above_generic(
+            ydl, RdioIE(storage, user, password, quality=quality))
         ydl.download(urls)
