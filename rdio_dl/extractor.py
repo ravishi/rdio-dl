@@ -42,12 +42,13 @@ class RdioIE(InfoExtractor):
 
         return any((re.match(test_re, url) for test_re in valid_urls.values()))
 
-    def __init__(self, storage, username, password):
+    def __init__(self, storage, username, password, quality):
         super(RdioIE, self).__init__(self)
 
         user_state = storage.load(username)
 
         self.rdio = RdioSession()
+        self.quality = quality
 
         if user_state:
             self.rdio._authorization_key = user_state.get('authorization_key')
@@ -68,12 +69,7 @@ class RdioIE(InfoExtractor):
                                     extras=['tracks'], referer=url)
         return result.json()
 
-        if not result.get('result'):
-            raise ExtractorError(result.get('message', u"Unknown error"))
-
-        return result.get('result')
-
-    def _get_playback_info_through_http(self, key):
+    def _get_playback_info_through_http(self, key, type=u'mp3-high'):
         player_name = '_web_{0}'.format(random_player_id())
 
         playback_info = self.rdio.api_call('getPlaybackInfo',
@@ -82,14 +78,14 @@ class RdioIE(InfoExtractor):
                                            playerName=player_name,
                                            requiresUnlimited=False,
                                            finishedAd=False,
-                                           type='mp3-high')
+                                           type=type)
 
         playback_info = playback_info.json()
 
         if not playback_info.get('result'):
-            reason = playback_info.get('message', "Unknown error")
+            reason = playback_info.get('message', u"Unknown error")
             raise ExtractorError(
-                "Failed to get playback information: `{0}'".format(reason))
+                u"Failed to get playback information: `{0}'".format(reason))
 
         return dict(url=playback_info['result']['surl'])
 
@@ -100,11 +96,11 @@ class RdioIE(InfoExtractor):
 
         typ = obj['type']
 
-        if typ == 't':
+        if typ == u't':
             return self._extract_track(obj)
 
-        elif typ not in ('a', 'p'):
-            raise ExtractorError("Unknown object type: `{0}'".format(typ))
+        elif typ not in (u'a', u'p'):
+            raise ExtractorError(u"Unknown object type: `{0}'".format(typ))
 
         # deal with playlists and albums
         tracks = obj.get('tracks', [])
@@ -120,16 +116,21 @@ class RdioIE(InfoExtractor):
         return self.playlist_result(entries, obj['key'], obj['name'])
 
     def _extract_track(self, track):
+        ext, typ = {
+            u'high': (u'mp3', u'mp3-high'),
+            u'very-high': (u'mp4', u'aac-very-high'),
+        }[self.quality]
+
         info = {
             'id': track['key'],
-            'ext': u'mp3',
+            'ext': ext,
             'title': track['name'],
             'uploader': track['artist'],
             'description': u'',
             'thumbnail': track['icon'],
             }
 
-        playback_info = self._get_playback_info_through_http(track['key'])
+        playback_info = self._get_playback_info_through_http(track['key'], type=typ)
 
         info.update(playback_info)
 
