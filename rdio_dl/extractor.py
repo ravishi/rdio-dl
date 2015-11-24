@@ -7,7 +7,6 @@ import requests.cookies
 from youtube_dl.utils import ExtractorError
 from youtube_dl.extractor.common import InfoExtractor
 
-from .config import storage_load
 from .private_api import RdioSession
 
 
@@ -39,18 +38,12 @@ class RdioIE(InfoExtractor):
                 r'(?P<playlist_name>[^\/]+)/?$'
             ),
             'short': r'^(?:https?://)?rd\.io/x/[^\/]+/?$',
-        }
+            }
 
         return any((re.match(test_re, url) for test_re in valid_urls.values()))
 
-    def _real_initialize(self):
-        username = self._downloader.params.get('username')
-        password = self._downloader.params.get('password')
-
-        if not (username and password):
-            raise ExtractorError(u"Please specify your Rdio credentials")
-
-        storage = storage_load()
+    def __init__(self, storage, username, password):
+        super(RdioIE, self).__init__(self)
 
         user_state = storage.load(username)
 
@@ -58,17 +51,15 @@ class RdioIE(InfoExtractor):
 
         if user_state:
             self.rdio._authorization_key = user_state.get('authorization_key')
-
             cookies = user_state.get('cookies', {})
             self.rdio.cookies = requests.cookies.cookiejar_from_dict(cookies)
 
         if not self.rdio._authorization_key:
             self.rdio.sign_in(username, password)
-
             storage.save(username, {
                 'cookies': dict(self.rdio.cookies),
                 'authorization_key': self.rdio._authorization_key,
-            })
+                })
 
     def _get_object_from_url(self, url):
         """Get a object (track, album, playlist) from the given URL.
@@ -136,7 +127,7 @@ class RdioIE(InfoExtractor):
             'uploader': track['artist'],
             'description': u'',
             'thumbnail': track['icon'],
-        }
+            }
 
         playback_info = self._get_playback_info_through_http(track['key'])
 
