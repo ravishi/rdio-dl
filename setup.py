@@ -29,7 +29,7 @@ setup(
     name='rdio_dl',
     version=__version__,
     packages=['rdio_dl'],
-    install_requires=['requests', 'youtube_dl', 'click'],
+    install_requires=['requests', 'youtube_dl', 'click', 'eyeD3'],
     author='Dirley Rodrigues',
     author_email='dirleyrls@gmail.com',
     long_description=README,

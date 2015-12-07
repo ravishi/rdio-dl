@@ -2,6 +2,7 @@
 import click
 import youtube_dl
 
+from rdio_dl.postprocessor import EyeD3PostProcessor
 from .config import storage_load
 from .extractor import RdioIE
 
@@ -28,4 +29,5 @@ def main(user, password, urls, quality, verbose):
     with youtube_dl.YoutubeDL(params=dict(verbose=verbose)) as ydl:
         add_info_extractor_above_generic(
             ydl, RdioIE(storage, user, password, quality=quality))
+        ydl.add_post_processor(EyeD3PostProcessor())
         ydl.download(urls)

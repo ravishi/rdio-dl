@@ -4,3 +4,4 @@ import rdio_dl.cli
 
 if __name__ == '__main__':
     rdio_dl.cli.main()
+
