@@ -26,7 +26,20 @@ def add_info_extractor_above_generic(ydl, ie):
 @click.argument(u'urls', required=True, nargs=-1)
 def main(user, password, urls, quality, verbose):
     storage = storage_load()
-    with youtube_dl.YoutubeDL(params=dict(verbose=verbose)) as ydl:
+
+    ydl_opts = {
+        'verbose': verbose,
+    }
+
+    if quality == u'very-high':
+        ydl_opts['postprocessors'] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': u'best',
+            'preferredquality': 0,
+            'nopostoverwrites': False,
+        }]
+
+    with youtube_dl.YoutubeDL(params=ydl_opts) as ydl:
         add_info_extractor_above_generic(
             ydl, RdioIE(storage, user, password, quality=quality))
         ydl.add_post_processor(EyeD3PostProcessor())
