@@ -31,6 +31,11 @@ class EyeD3PostProcessor(PostProcessor):
         filename = info['filepath']
 
         audio_file = eyed3.load(filename)
+
+        if not audio_file:
+            self._log(u"Unsupported file format: skipping metadata")
+            return [], info
+
         audio_file.tag = eyed3.id3.tag.Tag()
 
         for (key, value) in md.items():
