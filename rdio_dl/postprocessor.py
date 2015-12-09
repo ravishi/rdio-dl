@@ -1,51 +1,63 @@
-import eyed3
-import eyed3.id3.tag
-from youtube_dl.postprocessor.common import PostProcessor
+import os
+from youtube_dl.postprocessor import FFmpegMetadataPP
+from youtube_dl.utils import prepend_extension, encodeFilename
 
 
-class EyeD3PostProcessor(PostProcessor):
+class FFmpegAudioMetadataPP(FFmpegMetadataPP):
     def run(self, info):
-        md = dict()
+        metadata = self._extract_metadata(info)
+
+        if not metadata:
+            self._downloader.to_screen('[ffmpeg] There isn\'t any metadata to add')
+            return [], info
+
+        filename = info['filepath']
+        temp_filename = prepend_extension(filename, 'temp')
+
+        if info['ext'] == 'm4a':
+            options = ['-vn', '-acodec', 'copy']
+        else:
+            options = ['-c', 'copy']
+
+        for (name, value) in metadata.items():
+            options.extend(['-metadata', '%s=%s' % (name, value)])
+
+        self._downloader.to_screen('[ffmpeg] Adding metadata to \'%s\'' % filename)
+        self.run_ffmpeg(filename, temp_filename, options)
+        os.remove(encodeFilename(filename))
+        os.rename(encodeFilename(temp_filename), encodeFilename(filename))
+        return [], info
+
+    def _extract_metadata(self, info):
+        md = {}
 
         if info.get('title') is not None:
             md['title'] = info['title']
+
+        if info.get('upload_date') is not None:
+            md['date'] = info['upload_date']
 
         if info.get('artist') is not None:
             md['artist'] = info['artist']
         elif info.get('uploader') is not None:
             md['artist'] = info['uploader']
-
-        if info.get('album_artist') is not None:
-            md['album_artist'] = info['album_artist']
+        elif info.get('uploader_id') is not None:
+            md['artist'] = info['uploader_id']
 
         if info.get('album') is not None:
             md['album'] = info['album']
 
+        if info.get('album_artist') is not None:
+            md['album_artist'] = info['album_artist']
+
+        if info.get('description') is not None:
+            md['description'] = info['description']
+            md['comment'] = info['description']
+
+        if info.get('webpage_url') is not None:
+            md['purl'] = info['webpage_url']
+
         if info.get('track_number') is not None:
-            md['track_num'] = info['track_number']
+            md['track'] = info['track_number']
 
-        if not md:
-            self._log(u"There isn't any metadata to fill")
-            return [], info
-
-        filename = info['filepath']
-
-        audio_file = eyed3.load(filename)
-
-        if not audio_file:
-            self._log(u"Unsupported file format: skipping metadata")
-            return [], info
-
-        audio_file.tag = eyed3.id3.tag.Tag()
-
-        for (key, value) in md.items():
-            setattr(audio_file.tag, key, value)
-
-        self._log(u'Adding metadata to `{0}\''.format(filename))
-
-        audio_file.tag.save(filename)
-
-        return [], info
-
-    def _log(self, msg):
-        self._downloader.to_screen(u'[eyed3] {0}'.format(msg))
+        return md

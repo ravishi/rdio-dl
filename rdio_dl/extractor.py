@@ -131,7 +131,12 @@ class RdioIE(InfoExtractor):
             'track_number': track.get('trackNum'),
             'uploader': track['artist'],
             'description': u'',
-            'thumbnail': track['icon'],
+            'thumbnails': [
+                {'width': 200, 'height': 200, 'url': track.get('icon'),
+                 'id': u'{0}200'.format(track['albumKey'])},
+                {'width': 400, 'height': 400, 'url': track.get('icon400'),
+                 'id': u'{0}400'.format(track['albumKey'])},
+            ]
         }
 
         playback_info = self._get_playback_info_through_http(track['key'], type=typ)
