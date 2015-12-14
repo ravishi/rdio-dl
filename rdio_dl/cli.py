@@ -28,14 +28,19 @@ def add_info_extractor_above_generic(ydl, ie):
               help=(u'Embed thumbnail images. This requires'
                     u' ffmpeg and AtomicParsley (only for m4a)'
                     u' to be installed.'))
+@click.option(u'--ignore-errors',
+              flag_value=True, default=False,
+              help=(u'Continue on download errors, for example'
+                    u'to skip unavailable videos in a playlist'))
 @click.option(u'-v', u'--verbose', 'verbose', flag_value=True, default=False)
 @click.argument(u'urls', required=True, nargs=-1)
-def main(user, password, urls, quality, embed_thumbnail, verbose):
+def main(user, password, quality, embed_thumbnail, ignore_errors, verbose, urls):
     storage = storage_load()
 
     ydl_opts = {
         'verbose': verbose,
         'writethumbnail': embed_thumbnail,
+        'ignoreerrors': ignore_errors,
     }
 
     if quality == u'very-high':
